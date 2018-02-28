@@ -86,6 +86,7 @@ public class FeaturesConfig
     private boolean pagesIndexEagerCompactionEnabled;
 
     private boolean dictionaryAggregation;
+    private boolean resourceGroups;
 
     private int re2JDfaStatesLimit = Integer.MAX_VALUE;
     private int re2JDfaRetries = 5;
