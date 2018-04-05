@@ -343,6 +343,7 @@ public class ParquetHiveRecordCursor
                     .filter(Objects::nonNull)
                     .collect(toList());
 
+            // here the requested schema is sorely used for predicate pushdown
             MessageType requestedSchema = new MessageType(fileSchema.getName(), fields);
 
             LongArrayList offsets = new LongArrayList(blocks.size());

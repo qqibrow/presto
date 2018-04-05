@@ -31,6 +31,7 @@ import parquet.schema.MessageType;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
@@ -38,8 +39,8 @@ import java.util.Properties;
 import static com.facebook.presto.hive.HiveColumnHandle.ColumnType.REGULAR;
 import static com.facebook.presto.hive.HiveErrorCode.HIVE_BAD_DATA;
 import static com.facebook.presto.hive.HiveErrorCode.HIVE_CURSOR_ERROR;
+import static com.facebook.presto.hive.parquet.ParquetTypeUtils.getColumnType;
 import static com.facebook.presto.hive.parquet.ParquetTypeUtils.getFieldIndex;
-import static com.facebook.presto.hive.parquet.ParquetTypeUtils.getParquetType;
 import static com.google.common.base.Preconditions.checkState;
 import static java.util.Objects.requireNonNull;
 import static parquet.io.ColumnIOConverter.constructField;
@@ -55,6 +56,7 @@ public class ParquetPageSource
     private final List<String> columnNames;
     private final List<Type> types;
     private final List<Optional<Field>> fields;
+    private final List<List<String>> paths;
 
     private final Block[] constantBlocks;
     private final int[] hiveColumnIndexes;
@@ -84,6 +86,7 @@ public class ParquetPageSource
         int size = columns.size();
         this.constantBlocks = new Block[size];
         this.hiveColumnIndexes = new int[size];
+        this.paths = new ArrayList<>(size);
 
         ImmutableList.Builder<String> namesBuilder = ImmutableList.builder();
         ImmutableList.Builder<Type> typesBuilder = ImmutableList.builder();
@@ -97,9 +100,11 @@ public class ParquetPageSource
 
             namesBuilder.add(name);
             typesBuilder.add(type);
+            paths.add(column.getNestedColumn().isPresent() ? column.getNestedColumn().get().getNames() : new ArrayList<>());
+
             hiveColumnIndexes[columnIndex] = column.getHiveColumnIndex();
 
-            if (getParquetType(column, fileSchema, useParquetColumnNames) == null) {
+            if (getColumnType(column, fileSchema, useParquetColumnNames) == null) {
                 constantBlocks[columnIndex] = RunLengthEncodedBlock.create(type, null, MAX_VECTOR_LENGTH);
                 fieldsBuilder.add(Optional.empty());
             }
@@ -162,11 +167,38 @@ public class ParquetPageSource
                     Type type = types.get(fieldId);
                     Optional<Field> field = fields.get(fieldId);
                     int fieldIndex;
+                    List<String> path;
                     if (useParquetColumnNames) {
-                        fieldIndex = getFieldIndex(fileSchema, columnNames.get(fieldId));
+                        if (!paths.get(fieldId).isEmpty()) {
+                            // nested column path is available
+                            // TODO doesn't check whether we can actually get value based on the path
+                            path = paths.get(fieldId);
+                        }
+                        else {
+                            // nested column path is not, regular column
+                            fieldIndex = getFieldIndex(fileSchema, columnNames.get(fieldId));
+                            if (fieldIndex == -1) {
+                                path = new ArrayList<>();
+                            }
+                            else {
+                                String fieldName = fileSchema.getFields().get(fieldIndex).getName();
+                                path = new ArrayList<>();
+                                path.add(fieldName);
+                            }
+                        }
                     }
                     else {
+                        // use parquet column names is false, use index
+                        // TODO don't care about this
                         fieldIndex = hiveColumnIndexes[fieldId];
+                        if (fieldIndex == -1) {
+                            path = new ArrayList<>();
+                        }
+                        else {
+                            String fieldName = fileSchema.getFields().get(fieldIndex).getName();
+                            path = new ArrayList<>();
+                            path.add(fieldName);
+                        }
                     }
                     if (fieldIndex != -1 && field.isPresent()) {
                         blocks[fieldId] = new LazyBlock(batchSize, new ParquetBlockLoader(field.get()));

@@ -43,6 +43,7 @@ import com.facebook.presto.spi.ConnectorViewDefinition;
 import com.facebook.presto.spi.Constraint;
 import com.facebook.presto.spi.DiscretePredicates;
 import com.facebook.presto.spi.InMemoryRecordSet;
+import com.facebook.presto.spi.NestedColumn;
 import com.facebook.presto.spi.PrestoException;
 import com.facebook.presto.spi.RecordCursor;
 import com.facebook.presto.spi.SchemaTableName;
@@ -67,6 +68,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Joiner;
 import com.google.common.base.Splitter;
 import com.google.common.base.Verify;
+import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableMap.Builder;
@@ -479,6 +481,60 @@ public class HiveMetadata
         }
         return columnHandles.build();
     }
+
+    @Override
+    public Map<String, ColumnHandle> getNestedColumnHandles(ConnectorSession session, ConnectorTableHandle tableHandle, Collection<NestedColumn> nestedColumns)
+    {
+        SchemaTableName tableName = schemaTableName(tableHandle);
+        Optional<Table> table = metastore.getTable(tableName.getSchemaName(), tableName.getTableName());
+        if (!table.isPresent()) {
+            throw new TableNotFoundException(tableName);
+        }
+
+        // build map with base -> nestedColumn
+        ImmutableMultimap.Builder<String, NestedColumn> builder = ImmutableMultimap.builder();
+        for (NestedColumn nestedColumn : nestedColumns) {
+            builder.put(nestedColumn.getBase(), nestedColumn);
+        }
+        ImmutableMultimap<String, NestedColumn> multimap = builder.build();
+
+        ImmutableList.Builder<HiveColumnHandle> columns = ImmutableList.builder();
+        int hiveColumnIndex = 0;
+        for (HiveColumnHandle hiveColumnHandle : hiveColumnHandles(table.get())) {
+            if (hiveColumnHandle.getColumnType() == REGULAR) {
+                if (multimap.containsKey(hiveColumnHandle.getName())) {
+                    ImmutableCollection<NestedColumn> nestedColumnsByHiveColumn = multimap.get(hiveColumnHandle.getName());
+                    for (NestedColumn matchedNestColumn : nestedColumnsByHiveColumn) {
+                        columns = columns.add(new HiveColumnHandle(matchedNestColumn.getName(), toHiveType(typeTranslator, matchedNestColumn.getType()), matchedNestColumn.getType().getTypeSignature(), hiveColumnIndex++, REGULAR, Optional.empty(), Optional.of(matchedNestColumn)));
+                    }
+                }
+                else {
+                    columns = columns.add(new HiveColumnHandle(hiveColumnHandle.getName(), hiveColumnHandle.getHiveType(), hiveColumnHandle.getTypeSignature(), hiveColumnIndex++, hiveColumnHandle.getColumnType(), hiveColumnHandle.getComment(), Optional.empty()));
+                }
+            }
+            else {
+                columns = columns.add(hiveColumnHandle);
+            }
+        }
+        ImmutableMap.Builder<String, ColumnHandle> columnHandles = ImmutableMap.builder();
+        for (HiveColumnHandle columnHandle : columns.build()) {
+            columnHandles.put(columnHandle.getName(), columnHandle);
+        }
+        return columnHandles.build();
+    }
+
+//        ImmutableMap.Builder<String, ColumnHandle> columnHandles = ImmutableMap.builder();
+//        for (String dereference: dereferences) {
+//            String[] strs = dereference.split("\\.");
+//            String base = strs[0];
+//            Preconditions.checkArgument(columnHandles.containsKey(base), "base should not be null");
+//            HiveColumnHandle baseColumnHandle = (HiveColumnHandle) columnHandles.get(base);
+//            baseColumnHandle.getColumnType()
+//        }
+//        // Hack to get out msg column
+//        List<HiveColumnHandle> hiveColumnHandles = hiveColumnHandles(connectorId, table.get()).stream().filter(column -> column.getName().toLowerCase().equals("msg")).collect(toList());
+//        HiveColumnHandle onlyElement = Iterables.getOnlyElement(hiveColumnHandles);
+//        return ImmutableMap.of("request_vehicle_view_id", HiveColumnHandle.nestedColumnHandle(connectorId, "msg.request_vehicle_view_id", onlyElement));
 
     @SuppressWarnings("TryWithIdenticalCatches")
     @Override
@@ -1636,7 +1692,8 @@ public class HiveMetadata
                     column.getType().getTypeSignature(),
                     ordinal,
                     columnType,
-                    Optional.ofNullable(column.getComment())));
+                    Optional.ofNullable(column.getComment()),
+                    Optional.empty()));
             ordinal++;
         }
 

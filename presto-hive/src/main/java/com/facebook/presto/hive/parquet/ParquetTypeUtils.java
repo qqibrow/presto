@@ -14,6 +14,7 @@
 package com.facebook.presto.hive.parquet;
 
 import com.facebook.presto.hive.HiveColumnHandle;
+import com.facebook.presto.spi.NestedColumn;
 import com.facebook.presto.spi.PrestoException;
 import com.facebook.presto.spi.type.BigintType;
 import com.facebook.presto.spi.type.BooleanType;
@@ -24,6 +25,7 @@ import com.facebook.presto.spi.type.RealType;
 import com.facebook.presto.spi.type.TimestampType;
 import com.facebook.presto.spi.type.Type;
 import com.facebook.presto.spi.type.VarcharType;
+import com.google.common.base.Preconditions;
 import parquet.column.Encoding;
 import parquet.io.ColumnIO;
 import parquet.io.ColumnIOFactory;
@@ -33,8 +35,10 @@ import parquet.io.MessageColumnIO;
 import parquet.io.ParquetDecodingException;
 import parquet.io.PrimitiveColumnIO;
 import parquet.schema.DecimalMetadata;
+import parquet.schema.GroupType;
 import parquet.schema.MessageType;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -221,7 +225,7 @@ public final class ParquetTypeUtils
         }
     }
 
-    private static parquet.schema.Type getParquetTypeByName(String columnName, MessageType messageType)
+    private static parquet.schema.Type getParquetTypeByName(String columnName, GroupType messageType)
     {
         if (messageType.containsField(columnName)) {
             return messageType.getType(columnName);
@@ -255,5 +259,37 @@ public final class ParquetTypeUtils
     public static boolean isValueNull(boolean required, int definitionLevel, int maxDefinitionLevel)
     {
         return !required && (definitionLevel == maxDefinitionLevel - 1);
+    }
+
+    public static parquet.schema.Type getColumnType(HiveColumnHandle column, MessageType messageType, boolean useParquetColumnNames)
+    {
+        if (column.getNestedColumn().isPresent()) {
+            NestedColumn nestedField = column.getNestedColumn().get();
+            if (nestedField != null) {
+                return getSchema(messageType, nestedField.getNames());
+            }
+        }
+        parquet.schema.Type columnType = getParquetType(column, messageType, useParquetColumnNames);
+        return columnType;
+    }
+
+    private static parquet.schema.Type getSchema(GroupType groupType, List<String> fields)
+    {
+        Preconditions.checkArgument(fields.size() >= 1, "fields size is less than 1");
+        parquet.schema.Type typeByName = getParquetTypeByName(fields.get(0), groupType);
+        if (typeByName == null || fields.size() == 1) {
+            return typeByName;
+        }
+        else {
+            GroupType fieldGroupType = (GroupType) typeByName;
+            List<String> rest = fields.subList(1, fields.size());
+            List<parquet.schema.Type> childrenTypes = new ArrayList<>(1);
+            parquet.schema.Type childSchema = getSchema(fieldGroupType, rest);
+            if (childSchema != null) {
+                childrenTypes.add(childSchema);
+                return new MessageType(fieldGroupType.getName(), childrenTypes);
+            }
+            return fieldGroupType;
+        }
     }
 }

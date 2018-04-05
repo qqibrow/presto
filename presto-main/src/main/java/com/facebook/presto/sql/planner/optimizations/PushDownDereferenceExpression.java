@@ -15,6 +15,9 @@ package com.facebook.presto.sql.planner.optimizations;
 
 import com.facebook.presto.Session;
 import com.facebook.presto.metadata.Metadata;
+import com.facebook.presto.spi.ColumnHandle;
+import com.facebook.presto.spi.ColumnMetadata;
+import com.facebook.presto.spi.NestedColumn;
 import com.facebook.presto.spi.type.Type;
 import com.facebook.presto.sql.parser.SqlParser;
 import com.facebook.presto.sql.planner.ExpressionExtractor;
@@ -38,7 +41,10 @@ import com.facebook.presto.sql.tree.Expression;
 import com.facebook.presto.sql.tree.ExpressionRewriter;
 import com.facebook.presto.sql.tree.ExpressionTreeRewriter;
 import com.facebook.presto.sql.tree.NodeRef;
+import com.facebook.presto.sql.tree.SymbolReference;
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 
 import java.util.Collection;
@@ -156,10 +162,57 @@ public class PushDownDereferenceExpression
             List<DereferenceInfo> usedDereferenceInfo = getUsedDereferenceInfo(node.getOutputSymbols(), expressionInfoMap.values());
             if (!usedDereferenceInfo.isEmpty()) {
                 usedDereferenceInfo.forEach(DereferenceInfo::doesFromValidSource);
-                Map<Symbol, Expression> assignmentMap = usedDereferenceInfo.stream().collect(Collectors.toMap(DereferenceInfo::getSymbol, DereferenceInfo::getDereference));
-                return new ProjectNode(idAllocator.getNextId(), node, Assignments.builder().putAll(assignmentMap).putIdentities(node.getOutputSymbols()).build());
+                return mergeProjectWithTableScan(usedDereferenceInfo, node);
             }
             return node;
+        }
+
+        private NestedColumn toNestedColumn(DereferenceInfo dereferenceInfo, TableScanNode tableScanNode)
+        {
+            ImmutableList.Builder<String> builder = ImmutableList.builder();
+            Map<Symbol, ColumnHandle> assignments = tableScanNode.getAssignments();
+            new DefaultExpressionTraversalVisitor<Void, ImmutableList.Builder<String>>()
+            {
+                @Override
+                protected Void visitDereferenceExpression(DereferenceExpression node, ImmutableList.Builder<String> context)
+                {
+                    process(node.getBase(), context);
+                    context.add(node.getField().getValue());
+                    return null;
+                }
+
+                @Override
+                protected Void visitSymbolReference(SymbolReference node, ImmutableList.Builder<String> context)
+                {
+                    Symbol baseName = Symbol.from(node);
+                    Preconditions.checkArgument(assignments.containsKey(baseName), "base [%s] doesn't exist in assignments [%s]", baseName, assignments);
+                    ColumnMetadata columnMetadata = metadata.getColumnMetadata(session, tableScanNode.getTable(), assignments.get(baseName));
+                    context.add(columnMetadata.getName());
+                    return null;
+                }
+            }.process(dereferenceInfo.getDereference(), builder);
+            List<String> names = builder.build();
+            Preconditions.checkArgument(names.size() >= 2, "names should at least contain two elements");
+            return new NestedColumn(names, dereferenceInfo.getType());
+        }
+
+        public PlanNode mergeProjectWithTableScan(List<DereferenceInfo> dereferenceInfos, TableScanNode tableScanNode)
+        {
+            Map<Symbol, NestedColumn> nestedColumns = dereferenceInfos.stream().collect(Collectors.toMap(DereferenceInfo::getSymbol, dereferenceInfo -> toNestedColumn(dereferenceInfo, tableScanNode)));
+            Map<String, ColumnHandle> columnHandlers = metadata.getNestedColumnHandles(session, tableScanNode.getTable(), nestedColumns.values());
+
+            // TODO: we added msg in outputsymbols and columnhandler, might not be necessary.
+            ImmutableMap.Builder<Symbol, ColumnHandle> columns = ImmutableMap.builder();
+            for (Map.Entry<Symbol, NestedColumn> entry : nestedColumns.entrySet()) {
+                Symbol symbol = entry.getKey();
+                NestedColumn nestedColumn = entry.getValue();
+                columns.put(symbol, columnHandlers.get(nestedColumn.getName()));
+            }
+            ImmutableMap<Symbol, ColumnHandle> nestedColumnsMap = columns.build();
+
+            List<Symbol> outputSymbols = ImmutableList.<Symbol>builder().addAll(tableScanNode.getOutputSymbols()).addAll(nestedColumnsMap.keySet()).build();
+            Map<Symbol, ColumnHandle> assingments = ImmutableMap.<Symbol, ColumnHandle>builder().putAll(tableScanNode.getAssignments()).putAll(nestedColumnsMap).build();
+            return new TableScanNode(idAllocator.getNextId(), tableScanNode.getTable(), outputSymbols, assingments, tableScanNode.getLayout(), tableScanNode.getCurrentConstraint(), tableScanNode.getOriginalConstraint());
         }
 
         @Override
@@ -234,9 +287,10 @@ public class PushDownDereferenceExpression
 
         private DereferenceInfo getDereferenceInfo(Expression expression)
         {
+            Type type = extractType(expression);
             Symbol symbol = symbolAllocator.newSymbol(expression, extractType(expression));
             Symbol base = Iterables.getOnlyElement(SymbolsExtractor.extractAll(expression));
-            return new DereferenceInfo(expression, symbol, base);
+            return new DereferenceInfo(expression, symbol, type, base);
         }
 
         private List<Expression> extractDereference(Expression expression)
@@ -289,6 +343,7 @@ public class PushDownDereferenceExpression
         // e.g. for dereference expression msg.foo[1].bar, base is "msg", newSymbol is new assigned symbol to replace this dereference expression
         private final Expression dereferenceExpression;
         private final Symbol symbol;
+        private final Type type;
         private final Symbol baseSymbol;
 
         // fromValidSource is used to check whether the dereference expression is from either TableScan or Unnest
@@ -297,11 +352,12 @@ public class PushDownDereferenceExpression
         // - Aggregate[max_by := "max_by"("expr", "app_rating")] => [max_by:row(field0 varchar, field1 varchar)]
         private boolean fromValidSource;
 
-        public DereferenceInfo(Expression dereferenceExpression, Symbol symbol, Symbol baseSymbol)
+        public DereferenceInfo(Expression dereferenceExpression, Symbol symbol, Type type, Symbol baseSymbol)
         {
             this.dereferenceExpression = requireNonNull(dereferenceExpression);
             this.symbol = requireNonNull(symbol);
             this.baseSymbol = requireNonNull(baseSymbol);
+            this.type = requireNonNull(type);
             this.fromValidSource = false;
         }
 
@@ -333,7 +389,12 @@ public class PushDownDereferenceExpression
         @Override
         public String toString()
         {
-            return String.format("(%s, %s, %s)", dereferenceExpression, symbol, baseSymbol);
+            return String.format("(%s, %s, %s, %s)", dereferenceExpression, symbol, type, baseSymbol);
+        }
+
+        public Type getType()
+        {
+            return type;
         }
     }
 }

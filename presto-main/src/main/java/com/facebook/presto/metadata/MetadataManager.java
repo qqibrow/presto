@@ -30,6 +30,7 @@ import com.facebook.presto.spi.ConnectorTableLayoutResult;
 import com.facebook.presto.spi.ConnectorTableMetadata;
 import com.facebook.presto.spi.ConnectorViewDefinition;
 import com.facebook.presto.spi.Constraint;
+import com.facebook.presto.spi.NestedColumn;
 import com.facebook.presto.spi.PrestoException;
 import com.facebook.presto.spi.QueryId;
 import com.facebook.presto.spi.SchemaTableName;
@@ -396,6 +397,20 @@ public class MetadataManager
         ConnectorId connectorId = tableHandle.getConnectorId();
         ConnectorMetadata metadata = getMetadata(session, connectorId);
         Map<String, ColumnHandle> handles = metadata.getColumnHandles(session.toConnectorSession(connectorId), tableHandle.getConnectorHandle());
+
+        ImmutableMap.Builder<String, ColumnHandle> map = ImmutableMap.builder();
+        for (Entry<String, ColumnHandle> mapEntry : handles.entrySet()) {
+            map.put(mapEntry.getKey().toLowerCase(ENGLISH), mapEntry.getValue());
+        }
+        return map.build();
+    }
+
+    @Override
+    public Map<String, ColumnHandle> getNestedColumnHandles(Session session, TableHandle tableHandle, Collection<NestedColumn> dereferences)
+    {
+        ConnectorId connectorId = tableHandle.getConnectorId();
+        ConnectorMetadata metadata = getMetadata(session, connectorId);
+        Map<String, ColumnHandle> handles = metadata.getNestedColumnHandles(session.toConnectorSession(connectorId), tableHandle.getConnectorHandle(), dereferences);
 
         ImmutableMap.Builder<String, ColumnHandle> map = ImmutableMap.builder();
         for (Entry<String, ColumnHandle> mapEntry : handles.entrySet()) {

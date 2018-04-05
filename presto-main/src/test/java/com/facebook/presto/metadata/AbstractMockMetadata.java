@@ -21,6 +21,7 @@ import com.facebook.presto.spi.ColumnIdentity;
 import com.facebook.presto.spi.ColumnMetadata;
 import com.facebook.presto.spi.ConnectorTableMetadata;
 import com.facebook.presto.spi.Constraint;
+import com.facebook.presto.spi.NestedColumn;
 import com.facebook.presto.spi.SystemTable;
 import com.facebook.presto.spi.TableIdentity;
 import com.facebook.presto.spi.block.BlockEncodingSerde;
@@ -142,6 +143,12 @@ public abstract class AbstractMockMetadata
 
     @Override
     public Map<String, ColumnHandle> getColumnHandles(Session session, TableHandle tableHandle)
+    {
+        throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public Map<String, ColumnHandle> getNestedColumnHandles(Session session, TableHandle tableHandle, Collection<NestedColumn> dereferences)
     {
         throw new UnsupportedOperationException();
     }

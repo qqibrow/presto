@@ -27,6 +27,7 @@ import com.facebook.presto.spi.ConnectorSession;
 import com.facebook.presto.spi.PrestoException;
 import com.facebook.presto.spi.predicate.TupleDomain;
 import com.facebook.presto.spi.type.TypeManager;
+import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSet;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FSDataInputStream;
@@ -62,6 +63,7 @@ import static com.facebook.presto.hive.parquet.HdfsParquetDataSource.buildHdfsPa
 import static com.facebook.presto.hive.parquet.ParquetTypeUtils.getColumnIO;
 import static com.facebook.presto.hive.parquet.ParquetTypeUtils.getDescriptors;
 import static com.facebook.presto.hive.parquet.ParquetTypeUtils.getParquetType;
+import static com.facebook.presto.hive.parquet.ParquetTypeUtils.getColumnType;
 import static com.facebook.presto.hive.parquet.predicate.ParquetPredicateUtils.buildParquetPredicate;
 import static com.facebook.presto.hive.parquet.predicate.ParquetPredicateUtils.getParquetTupleDomain;
 import static com.facebook.presto.hive.parquet.predicate.ParquetPredicateUtils.predicateMatches;
@@ -163,13 +165,15 @@ public class ParquetPageSourceFactory
             MessageType fileSchema = fileMetaData.getSchema();
             dataSource = buildHdfsParquetDataSource(inputStream, path, fileSize, stats);
 
-            List<parquet.schema.Type> fields = columns.stream()
+            Optional<MessageType> optionalRequestedSchema = columns.stream()
                     .filter(column -> column.getColumnType() == REGULAR)
-                    .map(column -> getParquetType(column, fileSchema, useParquetColumnNames))
+                    .map(column -> getColumnType(column, fileSchema, useParquetColumnNames))
                     .filter(Objects::nonNull)
-                    .collect(toList());
+                    .map(type -> new MessageType(fileSchema.getName(), type))
+                    .reduce(MessageType::union);
 
-            MessageType requestedSchema = new MessageType(fileSchema.getName(), fields);
+            Preconditions.checkArgument(optionalRequestedSchema.isPresent(), "request schema is empty");
+            MessageType requestedSchema = optionalRequestedSchema.get();
 
             List<BlockMetaData> blocks = new ArrayList<>();
             for (BlockMetaData block : parquetMetadata.getBlocks()) {

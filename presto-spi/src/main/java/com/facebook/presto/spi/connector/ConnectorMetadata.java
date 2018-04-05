@@ -28,6 +28,7 @@ import com.facebook.presto.spi.ConnectorTableLayoutResult;
 import com.facebook.presto.spi.ConnectorTableMetadata;
 import com.facebook.presto.spi.ConnectorViewDefinition;
 import com.facebook.presto.spi.Constraint;
+import com.facebook.presto.spi.NestedColumn;
 import com.facebook.presto.spi.PrestoException;
 import com.facebook.presto.spi.SchemaTableName;
 import com.facebook.presto.spi.SchemaTablePrefix;
@@ -447,5 +448,10 @@ public interface ConnectorMetadata
     default ColumnIdentity deserializeColumnIdentity(byte[] bytes)
     {
         throw new PrestoException(NOT_SUPPORTED, "This connector does not support column identity");
+    }
+
+    default Map<String, ColumnHandle> getNestedColumnHandles(ConnectorSession session, ConnectorTableHandle tableHandle, Collection<NestedColumn> dereferences)
+    {
+        throw new PrestoException(NOT_SUPPORTED, "This connector does not support pushdown dereference expressions");
     }
 }
