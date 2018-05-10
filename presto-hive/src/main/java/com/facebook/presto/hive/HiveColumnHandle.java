@@ -64,19 +64,6 @@ public class HiveColumnHandle
     private final Optional<NestedColumn> nestedColumn;
     private final Optional<String> comment;
 
-//    @JsonCreator
-//    public HiveColumnHandle(
-//            @JsonProperty("clientId") String clientId,
-//            @JsonProperty("name") String name,
-//            @JsonProperty("hiveType") HiveType hiveType,
-//            @JsonProperty("typeSignature") TypeSignature typeSignature,
-//            @JsonProperty("hiveColumnIndex") int hiveColumnIndex,
-//            @JsonProperty("columnType") ColumnType columnType,
-//            @JsonProperty("comment") Optional<String> comment)
-//    {
-//        this(clientId, name, hiveType, typeSignature, hiveColumnIndex, columnType, comment, Optional.empty());
-//    }
-
     @JsonCreator
     public HiveColumnHandle(
             @JsonProperty("name") String name,

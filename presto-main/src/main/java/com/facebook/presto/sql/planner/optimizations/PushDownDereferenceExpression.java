@@ -41,8 +41,11 @@ import com.facebook.presto.sql.tree.Expression;
 import com.facebook.presto.sql.tree.ExpressionRewriter;
 import com.facebook.presto.sql.tree.ExpressionTreeRewriter;
 import com.facebook.presto.sql.tree.NodeRef;
+import com.facebook.presto.sql.tree.QualifiedName;
+import com.facebook.presto.sql.tree.SubscriptExpression;
 import com.facebook.presto.sql.tree.SymbolReference;
 import com.google.common.base.Preconditions;
+import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
@@ -167,52 +170,114 @@ public class PushDownDereferenceExpression
             return node;
         }
 
+        private class ToNestedColumnContext
+        {
+            boolean recursive;
+            ImmutableList.Builder<String> builder;
+
+            ToNestedColumnContext()
+            {
+                recursive = true;
+                builder = ImmutableList.builder();
+            }
+        }
+
         private NestedColumn toNestedColumn(DereferenceInfo dereferenceInfo, TableScanNode tableScanNode)
         {
-            ImmutableList.Builder<String> builder = ImmutableList.builder();
+            ToNestedColumnContext columnContext = new ToNestedColumnContext();
             Map<Symbol, ColumnHandle> assignments = tableScanNode.getAssignments();
-            new DefaultExpressionTraversalVisitor<Void, ImmutableList.Builder<String>>()
+            new DefaultExpressionTraversalVisitor<Void, ToNestedColumnContext>()
             {
                 @Override
-                protected Void visitDereferenceExpression(DereferenceExpression node, ImmutableList.Builder<String> context)
+                protected Void visitSubscriptExpression(SubscriptExpression node, ToNestedColumnContext context)
                 {
                     process(node.getBase(), context);
-                    context.add(node.getField().getValue());
+                    context.recursive = false;
                     return null;
                 }
 
                 @Override
-                protected Void visitSymbolReference(SymbolReference node, ImmutableList.Builder<String> context)
+                protected Void visitDereferenceExpression(DereferenceExpression node, ToNestedColumnContext context)
+                {
+                    process(node.getBase(), context);
+                    if (context.recursive) {
+                        context.builder.add(node.getField().getValue());
+                    }
+                    return null;
+                }
+
+                @Override
+                protected Void visitSymbolReference(SymbolReference node, ToNestedColumnContext context)
                 {
                     Symbol baseName = Symbol.from(node);
                     Preconditions.checkArgument(assignments.containsKey(baseName), "base [%s] doesn't exist in assignments [%s]", baseName, assignments);
                     ColumnMetadata columnMetadata = metadata.getColumnMetadata(session, tableScanNode.getTable(), assignments.get(baseName));
-                    context.add(columnMetadata.getName());
+                    context.builder.add(columnMetadata.getName());
                     return null;
                 }
-            }.process(dereferenceInfo.getDereference(), builder);
-            List<String> names = builder.build();
-            Preconditions.checkArgument(names.size() >= 2, "names should at least contain two elements");
+            }.process(dereferenceInfo.getDereference(), columnContext);
+            List<String> names = columnContext.builder.build();
+            Preconditions.checkArgument(names.size() >= 1, "names should at least contain two elements");
             return new NestedColumn(names, dereferenceInfo.getType());
+        }
+
+        private static class DereferenceReplacer1
+                extends ExpressionRewriter<Void>
+        {
+            private final Map<Expression, Symbol> map;
+
+            DereferenceReplacer1(Map<Expression, Symbol> map)
+            {
+                this.map = map;
+            }
+
+            @Override
+            public Expression rewriteDereferenceExpression(DereferenceExpression node, Void context, ExpressionTreeRewriter<Void> treeRewriter)
+            {
+                if (map.containsKey(node)) {
+                    return map.get(node).toSymbolReference();
+                }
+                return treeRewriter.defaultRewrite(node, context);
+            }
         }
 
         public PlanNode mergeProjectWithTableScan(List<DereferenceInfo> dereferenceInfos, TableScanNode tableScanNode)
         {
+            // get nested columns. All dereference expression will have a mapping nested column. array[1].task will return array
             Map<Symbol, NestedColumn> nestedColumns = dereferenceInfos.stream().collect(Collectors.toMap(DereferenceInfo::getSymbol, dereferenceInfo -> toNestedColumn(dereferenceInfo, tableScanNode)));
-            Map<String, ColumnHandle> columnHandlers = metadata.getNestedColumnHandles(session, tableScanNode.getTable(), nestedColumns.values());
 
-            // TODO: we added msg in outputsymbols and columnhandler, might not be necessary.
-            ImmutableMap.Builder<Symbol, ColumnHandle> columns = ImmutableMap.builder();
-            for (Map.Entry<Symbol, NestedColumn> entry : nestedColumns.entrySet()) {
-                Symbol symbol = entry.getKey();
-                NestedColumn nestedColumn = entry.getValue();
-                columns.put(symbol, columnHandlers.get(nestedColumn.getName()));
+            // get column handlers. Not all nested columns will have a mapping columnhandle. e.g, msg.foo might return for msg.foo.a and msg.foo.b
+            Map<String, ColumnHandle> nestedColumnHandles = metadata.getNestedColumnHandles(session, tableScanNode.getTable(), nestedColumns.values());
+
+            ImmutableMap.Builder<Symbol, ColumnHandle> columnHandleBuilder = ImmutableMap.builder();
+
+            // Use to replace expression in original dereference expression
+            ImmutableMap.Builder<Expression, Symbol> symbolExpressionBuilder = ImmutableMap.builder();
+
+            for (Map.Entry<String, ColumnHandle> columnHandleEntry : nestedColumnHandles.entrySet()) {
+                ColumnMetadata columnMetadata = metadata.getColumnMetadata(session, tableScanNode.getTable(), columnHandleEntry.getValue());
+                String name = columnMetadata.getName();
+                Iterable<String> strings = Splitter.on('.').trimResults().omitEmptyStrings().split(name);
+                Expression expression = DereferenceExpression.from(QualifiedName.of(strings));
+                Symbol symbol = symbolAllocator.newSymbol(name, columnMetadata.getType());
+                symbolExpressionBuilder.put(expression, symbol);
+                columnHandleBuilder.put(symbol, columnHandleEntry.getValue());
             }
-            ImmutableMap<Symbol, ColumnHandle> nestedColumnsMap = columns.build();
+            ImmutableMap<Symbol, ColumnHandle> nestedColumnsMap = columnHandleBuilder.build();
+            ImmutableMap<Expression, Symbol> symbolExpressionMap = symbolExpressionBuilder.build();
 
-            List<Symbol> outputSymbols = ImmutableList.<Symbol>builder().addAll(tableScanNode.getOutputSymbols()).addAll(nestedColumnsMap.keySet()).build();
-            Map<Symbol, ColumnHandle> assingments = ImmutableMap.<Symbol, ColumnHandle>builder().putAll(tableScanNode.getAssignments()).putAll(nestedColumnsMap).build();
-            return new TableScanNode(idAllocator.getNextId(), tableScanNode.getTable(), outputSymbols, assingments, tableScanNode.getLayout(), tableScanNode.getCurrentConstraint(), tableScanNode.getOriginalConstraint());
+            List<Symbol> originalOutputSymbols = tableScanNode.getOutputSymbols();
+            List<Symbol> outputSymbols = ImmutableList.<Symbol>builder().addAll(originalOutputSymbols).addAll(nestedColumnsMap.keySet()).build();
+            Map<Symbol, ColumnHandle> assignments = ImmutableMap.<Symbol, ColumnHandle>builder().putAll(tableScanNode.getAssignments()).putAll(nestedColumnsMap).build();
+            TableScanNode newTableScan = new TableScanNode(idAllocator.getNextId(), tableScanNode.getTable(), outputSymbols, assignments, tableScanNode.getLayout(), tableScanNode.getCurrentConstraint(), tableScanNode.getOriginalConstraint());
+
+            DereferenceReplacer1 dereferenceReplacer1 = new DereferenceReplacer1(symbolExpressionMap);
+            Assignments.Builder assignmentBuilder = Assignments.builder();
+            for (DereferenceInfo dereferenceInfo : dereferenceInfos) {
+                Expression expression = ExpressionTreeRewriter.rewriteWith(dereferenceReplacer1, dereferenceInfo.getDereference());
+                assignmentBuilder.put(dereferenceInfo.getSymbol(), expression);
+            }
+            return new ProjectNode(idAllocator.getNextId(), newTableScan, assignmentBuilder.putIdentities(originalOutputSymbols).build());
         }
 
         @Override
