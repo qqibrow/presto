@@ -40,8 +40,8 @@ import com.facebook.presto.sql.tree.DereferenceExpression;
 import com.facebook.presto.sql.tree.Expression;
 import com.facebook.presto.sql.tree.ExpressionRewriter;
 import com.facebook.presto.sql.tree.ExpressionTreeRewriter;
+import com.facebook.presto.sql.tree.Identifier;
 import com.facebook.presto.sql.tree.NodeRef;
-import com.facebook.presto.sql.tree.QualifiedName;
 import com.facebook.presto.sql.tree.SubscriptExpression;
 import com.facebook.presto.sql.tree.SymbolReference;
 import com.google.common.base.Preconditions;
@@ -182,7 +182,7 @@ public class PushDownDereferenceExpression
             }
         }
 
-        private NestedColumn toNestedColumn(DereferenceInfo dereferenceInfo, TableScanNode tableScanNode)
+        private Optional<NestedColumn> toNestedColumn(DereferenceInfo dereferenceInfo, TableScanNode tableScanNode)
         {
             ToNestedColumnContext columnContext = new ToNestedColumnContext();
             Map<Symbol, ColumnHandle> assignments = tableScanNode.getAssignments();
@@ -191,7 +191,7 @@ public class PushDownDereferenceExpression
                 @Override
                 protected Void visitSubscriptExpression(SubscriptExpression node, ToNestedColumnContext context)
                 {
-                    process(node.getBase(), context);
+                    // TODO process subscript expression.
                     context.recursive = false;
                     return null;
                 }
@@ -217,8 +217,7 @@ public class PushDownDereferenceExpression
                 }
             }.process(dereferenceInfo.getDereference(), columnContext);
             List<String> names = columnContext.builder.build();
-            Preconditions.checkArgument(names.size() >= 1, "names should at least contain two elements");
-            return new NestedColumn(names, dereferenceInfo.getType());
+            return names.size() > 0 ? Optional.of(new NestedColumn(names, dereferenceInfo.getType())) : Optional.empty();
         }
 
         private static class DereferenceReplacer1
@@ -241,26 +240,50 @@ public class PushDownDereferenceExpression
             }
         }
 
+        Expression getDereferenceExpressionFromNestedColumnMetadata(ColumnMetadata columnMetadata, Map<String, Symbol> columnNameToSymbol)
+        {
+            String name = columnMetadata.getName();
+            Iterable<String> strings = Splitter.on('.').trimResults().omitEmptyStrings().split(name);
+            Expression result = null;
+
+            for (String part : strings) {
+                if (result == null) {
+                    Preconditions.checkArgument(columnNameToSymbol.containsKey(part), "first element(base) doesn't exist in the map");
+                    result = columnNameToSymbol.get(part).toSymbolReference();
+                }
+                else {
+                    result = new DereferenceExpression(result, new Identifier(part));
+                }
+            }
+
+            return result;
+        }
+
         public PlanNode mergeProjectWithTableScan(List<DereferenceInfo> dereferenceInfos, TableScanNode tableScanNode)
         {
             // get nested columns. All dereference expression will have a mapping nested column. array[1].task will return array
-            Map<Symbol, NestedColumn> nestedColumns = dereferenceInfos.stream().collect(Collectors.toMap(DereferenceInfo::getSymbol, dereferenceInfo -> toNestedColumn(dereferenceInfo, tableScanNode)));
+            List<NestedColumn> nestedColumns = dereferenceInfos.stream().map(dereferenceInfo -> toNestedColumn(dereferenceInfo, tableScanNode)).filter(Optional::isPresent).map(Optional::get).collect(Collectors.toList());
 
             // get column handlers. Not all nested columns will have a mapping columnhandle. e.g, msg.foo might return for msg.foo.a and msg.foo.b
-            Map<String, ColumnHandle> nestedColumnHandles = metadata.getNestedColumnHandles(session, tableScanNode.getTable(), nestedColumns.values());
+            Map<String, ColumnHandle> nestedColumnHandles = metadata.getNestedColumnHandles(session, tableScanNode.getTable(), nestedColumns);
 
             ImmutableMap.Builder<Symbol, ColumnHandle> columnHandleBuilder = ImmutableMap.builder();
 
             // Use to replace expression in original dereference expression
             ImmutableMap.Builder<Expression, Symbol> symbolExpressionBuilder = ImmutableMap.builder();
 
+            // get column name to symbol mapping from original tableScan
+            ImmutableMap.Builder<String, Symbol> columnNameToSymbolBuilder = ImmutableMap.builder();
+            for (Map.Entry<Symbol, ColumnHandle> entry : tableScanNode.getAssignments().entrySet()) {
+                ColumnMetadata columnMetadata = metadata.getColumnMetadata(session, tableScanNode.getTable(), entry.getValue());
+                columnNameToSymbolBuilder.put(columnMetadata.getName(), entry.getKey());
+            }
+            Map<String, Symbol> columnNameToSymbol = columnNameToSymbolBuilder.build();
+
             for (Map.Entry<String, ColumnHandle> columnHandleEntry : nestedColumnHandles.entrySet()) {
                 ColumnMetadata columnMetadata = metadata.getColumnMetadata(session, tableScanNode.getTable(), columnHandleEntry.getValue());
-                String name = columnMetadata.getName();
-                Iterable<String> strings = Splitter.on('.').trimResults().omitEmptyStrings().split(name);
-                Expression expression = DereferenceExpression.from(QualifiedName.of(strings));
-                Symbol symbol = symbolAllocator.newSymbol(name, columnMetadata.getType());
-                symbolExpressionBuilder.put(expression, symbol);
+                Symbol symbol = symbolAllocator.newSymbol(columnMetadata.getName(), columnMetadata.getType());
+                symbolExpressionBuilder.put(getDereferenceExpressionFromNestedColumnMetadata(columnMetadata, columnNameToSymbol), symbol);
                 columnHandleBuilder.put(symbol, columnHandleEntry.getValue());
             }
             ImmutableMap<Symbol, ColumnHandle> nestedColumnsMap = columnHandleBuilder.build();
