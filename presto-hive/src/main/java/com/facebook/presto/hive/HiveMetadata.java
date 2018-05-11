@@ -485,19 +485,24 @@ public class HiveMetadata
     @Override
     public Map<String, ColumnHandle> getNestedColumnHandles(ConnectorSession session, ConnectorTableHandle tableHandle, Collection<NestedColumn> nestedColumns)
     {
+        if (!HiveSessionProperties.isParquetOptimizedReaderEnabled(session)) {
+            return ImmutableMap.of();
+        }
+
         SchemaTableName tableName = schemaTableName(tableHandle);
         Optional<Table> table = metastore.getTable(tableName.getSchemaName(), tableName.getTableName());
         if (!table.isPresent()) {
             throw new TableNotFoundException(tableName);
         }
-
-        Map<String, HiveColumnHandle> regularHiveColumnHandles = getRegularColumnHandles(table.get()).stream().collect(Collectors.toMap(HiveColumnHandle::getName, identity()));
+        List<HiveColumnHandle> regularColumnHandles = getRegularColumnHandles(table.get());
+        int maxHiveColumnIndex = regularColumnHandles.stream().map(HiveColumnHandle::getHiveColumnIndex).reduce(Integer::max).orElse(0);
+        Map<String, HiveColumnHandle> regularHiveColumnHandles = regularColumnHandles.stream().collect(Collectors.toMap(HiveColumnHandle::getName, identity()));
         ImmutableMap.Builder<String, ColumnHandle> columnHandles = ImmutableMap.builder();
         // TODO add multiple nested column to one column handle
         for (NestedColumn nestedColumn : nestedColumns) {
             HiveColumnHandle hiveColumnHandle = regularHiveColumnHandles.get(nestedColumn.getBase());
             if (hiveColumnHandle != null) {
-                columnHandles.put(nestedColumn.getName(), new HiveColumnHandle(nestedColumn.getName(), toHiveType(typeTranslator, nestedColumn.getType()), nestedColumn.getType().getTypeSignature(), hiveColumnHandle.getHiveColumnIndex(), hiveColumnHandle.getColumnType(), hiveColumnHandle.getComment(), Optional.of(nestedColumn)));
+                columnHandles.put(nestedColumn.getName(), new HiveColumnHandle(nestedColumn.getName(), toHiveType(typeTranslator, nestedColumn.getType()), nestedColumn.getType().getTypeSignature(), ++maxHiveColumnIndex, hiveColumnHandle.getColumnType(), hiveColumnHandle.getComment(), Optional.of(nestedColumn)));
             }
         }
         return columnHandles.build();
