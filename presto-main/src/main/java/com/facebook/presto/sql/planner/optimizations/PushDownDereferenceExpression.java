@@ -165,7 +165,9 @@ public class PushDownDereferenceExpression
             List<DereferenceInfo> usedDereferenceInfo = getUsedDereferenceInfo(node.getOutputSymbols(), expressionInfoMap.values());
             if (!usedDereferenceInfo.isEmpty()) {
                 usedDereferenceInfo.forEach(DereferenceInfo::doesFromValidSource);
-                return mergeProjectWithTableScan(usedDereferenceInfo, node);
+                Map<Symbol, Expression> assignmentMap = usedDereferenceInfo.stream().collect(Collectors.toMap(DereferenceInfo::getSymbol, DereferenceInfo::getDereference));
+                return new ProjectNode(idAllocator.getNextId(), node, Assignments.builder().putAll(assignmentMap).putIdentities(node.getOutputSymbols()).build());
+                //return mergeProjectWithTableScan(usedDereferenceInfo, node);
             }
             return node;
         }
