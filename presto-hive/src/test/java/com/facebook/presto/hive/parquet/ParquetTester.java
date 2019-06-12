@@ -24,12 +24,14 @@ import com.facebook.presto.hive.parquet.write.MapKeyValuesSchemaConverter;
 import com.facebook.presto.hive.parquet.write.SingleLevelArrayMapKeyValuesSchemaConverter;
 import com.facebook.presto.hive.parquet.write.SingleLevelArraySchemaConverter;
 import com.facebook.presto.hive.parquet.write.TestMapredParquetOutputFormat;
+import com.facebook.presto.parquet.ParquetWriter;
 import com.facebook.presto.spi.ConnectorPageSource;
 import com.facebook.presto.spi.ConnectorSession;
 import com.facebook.presto.spi.Page;
 import com.facebook.presto.spi.RecordCursor;
 import com.facebook.presto.spi.RecordPageSource;
 import com.facebook.presto.spi.block.Block;
+import com.facebook.presto.spi.block.BlockBuilder;
 import com.facebook.presto.spi.type.ArrayType;
 import com.facebook.presto.spi.type.DateType;
 import com.facebook.presto.spi.type.DecimalType;
@@ -68,10 +70,12 @@ import parquet.schema.MessageType;
 
 import java.io.Closeable;
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.math.BigInteger;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -87,6 +91,7 @@ import static com.facebook.presto.hive.HiveUtil.isArrayType;
 import static com.facebook.presto.hive.HiveUtil.isMapType;
 import static com.facebook.presto.hive.HiveUtil.isRowType;
 import static com.facebook.presto.hive.HiveUtil.isStructuralType;
+import static com.facebook.presto.spi.type.BigintType.BIGINT;
 import static com.facebook.presto.spi.type.TimeZoneKey.UTC_KEY;
 import static com.facebook.presto.spi.type.VarbinaryType.VARBINARY;
 import static com.facebook.presto.spi.type.Varchars.isVarcharType;
@@ -100,6 +105,7 @@ import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 import static parquet.column.ParquetProperties.WriterVersion.PARQUET_1_0;
+import static parquet.column.ParquetProperties.WriterVersion.PARQUET_2_0;
 import static parquet.hadoop.ParquetOutputFormat.COMPRESSION;
 import static parquet.hadoop.ParquetOutputFormat.ENABLE_DICTIONARY;
 import static parquet.hadoop.ParquetOutputFormat.WRITER_VERSION;
@@ -256,6 +262,46 @@ public class ParquetTester
             Iterable<?>[] readValues,
             List<String> columnNames,
             List<Type> columnTypes,
+            Optional<MessageType> parquetSchema,
+            boolean singleLevelArray)
+            throws Exception
+    {
+        assertRoundTrip(objectInspectors, writeValues, readValues, columnNames, columnTypes, Optional.empty(), parquetSchema, singleLevelArray);
+    }
+
+    void testWriteParquetFile()
+            throws IOException
+    {
+        try (TempFile tempFile = new TempFile("test", "parquet")) {
+            JobConf jobConf = new JobConf();
+            jobConf.setEnum(COMPRESSION, UNCOMPRESSED);
+            jobConf.setBoolean(ENABLE_DICTIONARY, false);
+            // TODO not sure it's 2.0
+            jobConf.setEnum(WRITER_VERSION, PARQUET_2_0);
+            ImmutableList<String> columnNames = ImmutableList.of("test_column_name");
+            ImmutableList<Type> columnTypes = ImmutableList.of(BIGINT);
+            ParquetWriter parquetWriter = new ParquetWriter(
+                    new FileOutputStream(tempFile.getFile()),
+                    columnNames,
+                    columnTypes);
+
+            // write down some data
+            Iterable<Integer> iterable = Arrays.asList(42, 43);
+            BlockBuilder blockBuilder = BIGINT.createFixedSizeBlockBuilder(2).writeLong(42L).writeLong(43L);
+            Block block = blockBuilder.build();
+            Block[] blocks = new Block[] {block};
+            parquetWriter.write(new Page(blocks));
+            parquetWriter.close();
+            assertFileContents(SESSION, tempFile.getFile(), getIterators(new Iterable[] {iterable}), columnNames, columnTypes);
+        }
+    }
+
+    void assertRoundTrip(List<ObjectInspector> objectInspectors,
+            Iterable<?>[] writeValues,
+            Iterable<?>[] readValues,
+            List<String> columnNames,
+            List<Type> columnTypes,
+            Optional<List<String>> rootColumns,
             Optional<MessageType> parquetSchema,
             boolean singleLevelArray)
             throws Exception

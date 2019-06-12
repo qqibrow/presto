@@ -124,6 +124,13 @@ public abstract class AbstractTestParquetReader
     }
 
     @Test
+    public void testSimpleWriter()
+            throws Exception
+    {
+        tester.testWriteParquetFile();
+    }
+
+    @Test
     public void testArray()
             throws Exception
     {
