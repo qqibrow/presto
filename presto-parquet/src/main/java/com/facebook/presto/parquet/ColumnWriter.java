@@ -29,5 +29,9 @@ public interface ColumnWriter
 
     long getRetainedBytes();
 
+    int getRows();
+
     void reset();
+
+
 }
