@@ -102,16 +102,16 @@ public class HiveFileFormatBenchmark
     private static final HdfsEnvironment HDFS_ENVIRONMENT = createTestHdfsEnvironment(CONFIG);
 
     @Param({
-            "LINEITEM",
-            "BIGINT_SEQUENTIAL",
-            "BIGINT_RANDOM",
-            "VARCHAR_SMALL",
-            "VARCHAR_LARGE",
-            "VARCHAR_DICTIONARY",
-            "MAP_VARCHAR_DOUBLE",
-            "LARGE_MAP_VARCHAR_DOUBLE",
-            "MAP_INT_DOUBLE",
-            "LARGE_MAP_INT_DOUBLE",
+//            "LINEITEM",
+//            "BIGINT_SEQUENTIAL",
+//            "BIGINT_RANDOM",
+//            "VARCHAR_SMALL",
+//            "VARCHAR_LARGE",
+//            "VARCHAR_DICTIONARY",
+//            "MAP_VARCHAR_DOUBLE",
+//            "LARGE_MAP_VARCHAR_DOUBLE",
+//            "MAP_INT_DOUBLE",
+//            "LARGE_MAP_INT_DOUBLE",
             "LARGE_ARRAY_VARCHAR"})
     private DataSet dataSet;
 
@@ -122,15 +122,15 @@ public class HiveFileFormatBenchmark
     private HiveCompressionCodec compression;
 
     @Param({
-            "PRESTO_RCBINARY",
-            "PRESTO_RCTEXT",
-            "PRESTO_ORC",
-            "PRESTO_DWRF",
+//            "PRESTO_RCBINARY",
+//            "PRESTO_RCTEXT",
+//            "PRESTO_ORC",
+//            "PRESTO_DWRF",
             "PRESTO_PARQUET",
-            "HIVE_RCBINARY",
-            "HIVE_RCTEXT",
-            "HIVE_ORC",
-            "HIVE_DWRF",
+//            "HIVE_RCBINARY",
+//            "HIVE_RCTEXT",
+//            "HIVE_ORC",
+//            "HIVE_DWRF",
             "HIVE_PARQUET"})
     private FileFormat fileFormat;
 
