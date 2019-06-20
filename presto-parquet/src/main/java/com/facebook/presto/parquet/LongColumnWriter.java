@@ -100,7 +100,7 @@ public class LongColumnWriter
         }
         ParquetMetadataConverter parquetMetadataConverter = new ParquetMetadataConverter();
 
-        long uncompressedSize = bytes.size();
+        long uncompressedSize = bytes.size() + replicationLevelBytes.length + definitionLevelBytes.length;
         long compressedSize = uncompressedSize;
 
         ByteArrayOutputStream pageHeaderOutputStream = new ByteArrayOutputStream();

@@ -286,7 +286,7 @@ public class ParquetTester
                     columnTypes);
 
             // write down some data
-            Iterable<Integer> iterable = Arrays.asList(42, 43);
+            Iterable<Long> iterable = Arrays.asList(42L, 43L);
             BlockBuilder blockBuilder = BIGINT.createFixedSizeBlockBuilder(2).writeLong(42L).writeLong(43L);
             Block block = blockBuilder.build();
             Block[] blocks = new Block[] {block};

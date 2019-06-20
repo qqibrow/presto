@@ -33,8 +33,8 @@ public class MetadataWriter
 
         SchemaElement child = new SchemaElement();
         child.setName("test_int_type");
-        child.setType(Type.INT32);
-        child.setConverted_type(ConvertedType.INT_32);
+        child.setType(Type.INT64);
+        child.setConverted_type(ConvertedType.INT_64);
         child.setRepetition_type(FieldRepetitionType.REQUIRED);
 
         fileMetaData.setSchema(ImmutableList.of(root, child));
@@ -45,7 +45,7 @@ public class MetadataWriter
         Preconditions.checkArgument(stats.size() == 1, "stats size is not 1");
         Statistics statistics = stats.get(0);
         ColumnMetaData columnMetaData = new ColumnMetaData(
-                Type.INT32,
+                Type.INT64,
                 ImmutableList.of(Encoding.PLAIN),
                 ImmutableList.of("test_int_type"),
                 CompressionCodec.UNCOMPRESSED,
