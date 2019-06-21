@@ -4,7 +4,9 @@ import com.facebook.presto.spi.block.Block;
 import com.facebook.presto.spi.type.Type;
 import com.google.common.collect.ImmutableList;
 import io.airlift.slice.Slices;
-import org.apache.parquet.column.Encoding;
+import org.apache.parquet.format.Encoding;
+import org.apache.parquet.format.ColumnMetaData;
+import org.apache.parquet.format.CompressionCodec;
 import org.apache.parquet.format.converter.ParquetMetadataConverter;
 import parquet.bytes.BytesInput;
 import parquet.column.values.ValuesWriter;
@@ -18,6 +20,7 @@ import java.util.List;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkState;
 import static java.util.Objects.requireNonNull;
+import static org.apache.parquet.format.Encoding.*;
 
 public class LongColumnWriter
         implements ColumnWriter
@@ -26,12 +29,22 @@ public class LongColumnWriter
     private static final int INITIAL_SLAB_SIZE = 64;
 
     private final Type type;
+    private final List<String> path;
+    private final List<Encoding> encodings;
+    CompressionCodec compressionCodec;
+
+    private final org.apache.parquet.format.Type parquetType;
     private final ValuesWriter valuesWriter;
     private final RunLengthBitPackingHybridEncoder definitionLevel;
     private final RunLengthBitPackingHybridEncoder replicationLevel;
 
     private boolean closed;
+    private boolean getDataStreamsCalled;
     private int rows;
+
+    private byte[] data;
+    private byte[] replicationLevelBytes;
+    private byte[] definitionLevelBytes;
 
     public LongColumnWriter(Type type)
     {
@@ -39,6 +52,11 @@ public class LongColumnWriter
         this.valuesWriter = new PlainValuesWriter(INITIAL_SLAB_SIZE, DEFAULT_PAGE_SIZE);
         this.definitionLevel = new RunLengthBitPackingHybridEncoder(1, INITIAL_SLAB_SIZE, DEFAULT_PAGE_SIZE);
         this.replicationLevel = new RunLengthBitPackingHybridEncoder(1, INITIAL_SLAB_SIZE, DEFAULT_PAGE_SIZE);
+
+        this.path = ImmutableList.of("test_int_type");
+        this.parquetType = org.apache.parquet.format.Type.INT64;
+        this.encodings = ImmutableList.of(PLAIN);
+        this.compressionCodec = CompressionCodec.UNCOMPRESSED;
     }
 
     @Override
@@ -78,6 +96,25 @@ public class LongColumnWriter
         closed = true;
     }
 
+    // Returns ColumnMetaData that offset is invalid
+    @Override
+    public ColumnMetaData getColumnMetaData()
+    {
+        checkState(closed);
+        checkState(getDataStreamsCalled);
+
+        long uncompressedBytes = data.length + replicationLevelBytes.length + definitionLevelBytes.length;
+        return new ColumnMetaData(
+                parquetType,
+                encodings,
+                path,
+                compressionCodec,
+                rows,
+                uncompressedBytes,
+                uncompressedBytes,
+                0);
+    }
+
     // page header
     // replication levels
     // definition levels
@@ -89,7 +126,6 @@ public class LongColumnWriter
 
         ImmutableList.Builder<ParquetDataOutput> outputDataStreams = ImmutableList.builder();
         BytesInput bytes = valuesWriter.getBytes();
-        byte[] data, replicationLevelBytes, definitionLevelBytes;
         try {
             data = bytes.toByteArray();
             replicationLevelBytes = replicationLevel.toBytes().toByteArray();
@@ -100,12 +136,12 @@ public class LongColumnWriter
         }
         ParquetMetadataConverter parquetMetadataConverter = new ParquetMetadataConverter();
 
-        long uncompressedSize = bytes.size() + replicationLevelBytes.length + definitionLevelBytes.length;
+        long uncompressedSize = data.length + replicationLevelBytes.length + definitionLevelBytes.length;
         long compressedSize = uncompressedSize;
 
         ByteArrayOutputStream pageHeaderOutputStream = new ByteArrayOutputStream();
         try {
-            parquetMetadataConverter.writeDataPageV2Header((int) uncompressedSize, (int) compressedSize, rows, 0, rows, Encoding.PLAIN, replicationLevelBytes.length, definitionLevelBytes.length, pageHeaderOutputStream);
+            parquetMetadataConverter.writeDataPageV2Header((int) uncompressedSize, (int) compressedSize, rows, 0, rows, org.apache.parquet.column.Encoding.PLAIN, replicationLevelBytes.length, definitionLevelBytes.length, pageHeaderOutputStream);
             outputDataStreams.add(ParquetDataOutput.createDataOutput(Slices.wrappedBuffer(pageHeaderOutputStream.toByteArray())));
         }
         catch (IOException e) {
@@ -115,6 +151,7 @@ public class LongColumnWriter
         outputDataStreams.add(ParquetDataOutput.createDataOutput(Slices.wrappedBuffer(definitionLevelBytes)));
         outputDataStreams.add(ParquetDataOutput.createDataOutput(Slices.wrappedBuffer(data)));
 
+        getDataStreamsCalled = true;
         return outputDataStreams.build();
     }
 
@@ -127,7 +164,7 @@ public class LongColumnWriter
     @Override
     public long getRetainedBytes()
     {
-        return valuesWriter.getAllocatedSize() + definitionLevel.getBufferedSize() + replicationLevel.getBufferedSize();
+        return valuesWriter.getAllocatedSize() + definitionLevel.getAllocatedSize() + replicationLevel.getAllocatedSize();
     }
 
     @Override
@@ -139,11 +176,15 @@ public class LongColumnWriter
     @Override
     public void reset()
     {
-        throw new UnsupportedOperationException("reset should not be used now");
-//        closed = false;
-//        rows = 0;
-//        valuesWriter.reset();
-//        definitionLevel.reset();
-//        replicationLevel.reset();
+        closed = false;
+        rows = 0;
+        valuesWriter.reset();
+        definitionLevel.reset();
+        replicationLevel.reset();
+
+        getDataStreamsCalled = false;
+        data = null;
+        replicationLevelBytes = null;
+        definitionLevelBytes = null;
     }
 }

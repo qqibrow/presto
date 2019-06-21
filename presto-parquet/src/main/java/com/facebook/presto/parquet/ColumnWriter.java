@@ -14,6 +14,7 @@
 package com.facebook.presto.parquet;
 
 import com.facebook.presto.spi.block.Block;
+import org.apache.parquet.format.ColumnMetaData;
 
 import java.util.List;
 
@@ -23,7 +24,10 @@ public interface ColumnWriter
 
     void close();
 
+    ColumnMetaData getColumnMetaData();
+
     List<ParquetDataOutput> getDataStreams();
+
 
     long getBufferedBytes();
 

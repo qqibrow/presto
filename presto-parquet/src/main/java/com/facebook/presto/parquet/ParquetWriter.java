@@ -20,6 +20,9 @@ import com.google.common.collect.ImmutableList;
 import io.airlift.slice.OutputStreamSliceOutput;
 import io.airlift.slice.Slice;
 import io.airlift.slice.Slices;
+import org.apache.parquet.format.ColumnChunk;
+import org.apache.parquet.format.ColumnMetaData;
+import org.apache.parquet.format.RowGroup;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -27,8 +30,12 @@ import java.io.OutputStream;
 import java.util.ArrayList;
 import java.util.List;
 
+import static com.facebook.presto.parquet.ParquetDataOutput.createDataOutput;
 import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkState;
+import static com.google.common.collect.ImmutableList.toImmutableList;
 import static io.airlift.slice.SizeOf.SIZE_OF_INT;
+import static io.airlift.slice.Slices.wrappedBuffer;
 import static java.nio.charset.StandardCharsets.US_ASCII;
 import static java.util.Objects.requireNonNull;
 
@@ -40,9 +47,12 @@ public class ParquetWriter
     private final OutputStreamSliceOutput outputStream;
     private final List<Type> types;
 
-    private boolean closed;
+    private List<RowGroup> rowGroups = new ArrayList<>();
 
-    private static final int PARQUET_METADATA_LENGTH = 4;
+    private long rows;
+    private boolean closed;
+    private boolean writeHeader;
+
     public static final byte[] MAGIC = "PAR1".getBytes(US_ASCII);
 
     public ParquetWriter(OutputStream outputStream, List<String> columnNames, List<Type> types)
@@ -70,7 +80,10 @@ public class ParquetWriter
             bufferedBytes += writer.getBufferedBytes();
         }
 
-        // TODO flush under different reasons
+        rows += page.getPositionCount();
+
+        columnWriters.forEach(ColumnWriter::close);
+        flush();
     }
 
     @Override
@@ -82,7 +95,11 @@ public class ParquetWriter
         }
         closed = true;
         columnWriters.forEach(ColumnWriter::close);
-        flush();
+
+        if (rows > 0) {
+            flush();
+        }
+        flushFooter();
         outputStream.close();
     }
 
@@ -97,33 +114,85 @@ public class ParquetWriter
     private void flush()
             throws IOException
     {
-        Preconditions.checkArgument(closed, "Only support flush at last for now");
+        // write header
+        if (!writeHeader) {
+            getHeader().writeData(outputStream);
+            writeHeader = true;
+        }
 
+        // write pages
         List<ParquetDataOutput> outputData = new ArrayList<>();
         long stripeStartOffset = outputStream.size();
-
-        ParquetDataOutput magicOutput = ParquetDataOutput.createDataOutput(Slices.wrappedBuffer(MAGIC));
-        outputData.add(magicOutput);
-
-        List<Statistics> statistics = new ArrayList<>();
+        List<ColumnMetaData> columnMetaDatas = new ArrayList<>();
         for (ColumnWriter columnWriter : columnWriters) {
             List<ParquetDataOutput> streams = columnWriter.getDataStreams();
-            int rows = columnWriter.getRows();
-            long bytes = streams.stream().mapToLong(stream -> stream.size()).sum();
-            statistics.add(new Statistics(rows, bytes));
+            columnMetaDatas.add(columnWriter.getColumnMetaData());
             outputData.addAll(streams);
         }
-        Slice footer = metadataWriter.getFooter(2, statistics);
-        outputData.add(ParquetDataOutput.createDataOutput(footer));
+
+        // update stats
+        updateRowGroups(getOffsetColumnMetadata(columnMetaDatas, stripeStartOffset));
+        outputData.forEach(data -> data.writeData(outputStream));
+
+        finishRowGroup();
+    }
+
+    private void finishRowGroup()
+    {
+        rows = 0;
+        columnWriters.forEach(ColumnWriter::reset);
+    }
+
+    private void flushFooter()
+    {
+        checkState(closed);
+        getFooter().forEach(data -> data.writeData(outputStream));
+    }
+
+    private void updateRowGroups(List<ColumnMetaData> columnMetaData)
+    {
+        long totalBytes = columnMetaData.stream().mapToLong(ColumnMetaData::getTotal_compressed_size).sum();
+        Preconditions.checkArgument(totalBytes > 0);
+        ImmutableList<ColumnChunk> columnChunks = columnMetaData.stream().map(ParquetWriter::toColumnChunk).collect(toImmutableList());
+        rowGroups.add(new RowGroup(columnChunks, totalBytes, rows));
+    }
+
+    private static ColumnChunk toColumnChunk(ColumnMetaData metaData)
+    {
+        // TODO(lu.niu) Not sure whether file_offset is used
+        ColumnChunk columnChunk = new ColumnChunk(0);
+        columnChunk.setMeta_data(metaData);
+        return columnChunk;
+    }
+
+    private ParquetDataOutput getHeader()
+    {
+        return createDataOutput(wrappedBuffer(MAGIC));
+    }
+
+    private List<ParquetDataOutput> getFooter()
+    {
+
+        List<ParquetDataOutput> outputData = new ArrayList<>();
+        Slice footer = metadataWriter.getFooter(rowGroups);
+        outputData.add(createDataOutput(footer));
 
         Slice footerSize = Slices.allocate(SIZE_OF_INT);
         footerSize.setInt(0, footer.length());
-        outputData.add(ParquetDataOutput.createDataOutput(footerSize));
+        outputData.add(createDataOutput(footerSize));
 
-        outputData.add(magicOutput);
+        outputData.add(createDataOutput(wrappedBuffer(MAGIC)));
+        return outputData;
+    }
 
-        OutputStreamSliceOutput output = new OutputStreamSliceOutput(outputStream);
-        outputData.forEach(data -> data.writeData(output));
-        output.close();
+    private List<ColumnMetaData> getOffsetColumnMetadata(List<ColumnMetaData> columnMetaDatas, long offset)
+    {
+        ImmutableList.Builder<ColumnMetaData> builder = ImmutableList.builder();
+        long currentOffset = offset;
+        for (ColumnMetaData metaData : columnMetaDatas) {
+            builder.add(new ColumnMetaData(metaData.type, metaData.encodings, metaData.path_in_schema, metaData.codec, metaData.num_values, metaData.total_uncompressed_size, metaData.total_compressed_size, currentOffset));
+            currentOffset += metaData.getTotal_compressed_size();
+        }
+        return builder.build();
     }
 }
