@@ -38,10 +38,13 @@ public class LongColumnWriter
     private final RunLengthBitPackingHybridEncoder definitionLevel;
     private final RunLengthBitPackingHybridEncoder replicationLevel;
 
+    private final ParquetMetadataConverter parquetMetadataConverter = new ParquetMetadataConverter();
+
     private boolean closed;
     private boolean getDataStreamsCalled;
     private int rows;
 
+    private byte[] pageheader;
     private byte[] data;
     private byte[] replicationLevelBytes;
     private byte[] definitionLevelBytes;
@@ -103,15 +106,15 @@ public class LongColumnWriter
         checkState(closed);
         checkState(getDataStreamsCalled);
 
-        long uncompressedBytes = data.length + replicationLevelBytes.length + definitionLevelBytes.length;
+        long totalBytes = pageheader.length + data.length + replicationLevelBytes.length + definitionLevelBytes.length;
         return new ColumnMetaData(
                 parquetType,
                 encodings,
                 path,
                 compressionCodec,
                 rows,
-                uncompressedBytes,
-                uncompressedBytes,
+                totalBytes,
+                totalBytes,
                 0);
     }
 
@@ -130,23 +133,19 @@ public class LongColumnWriter
             data = bytes.toByteArray();
             replicationLevelBytes = replicationLevel.toBytes().toByteArray();
             definitionLevelBytes = definitionLevel.toBytes().toByteArray();
+
+            long uncompressedSize = data.length + replicationLevelBytes.length + definitionLevelBytes.length;
+            long compressedSize = uncompressedSize;
+
+            ByteArrayOutputStream pageHeaderOutputStream = new ByteArrayOutputStream();
+            parquetMetadataConverter.writeDataPageV2Header((int) uncompressedSize, (int) compressedSize, rows, 0, rows, org.apache.parquet.column.Encoding.PLAIN, replicationLevelBytes.length, definitionLevelBytes.length, pageHeaderOutputStream);
+            pageheader = pageHeaderOutputStream.toByteArray();
         }
         catch (IOException e) {
             throw new RuntimeException("Unable to write bytes", e);
         }
-        ParquetMetadataConverter parquetMetadataConverter = new ParquetMetadataConverter();
 
-        long uncompressedSize = data.length + replicationLevelBytes.length + definitionLevelBytes.length;
-        long compressedSize = uncompressedSize;
-
-        ByteArrayOutputStream pageHeaderOutputStream = new ByteArrayOutputStream();
-        try {
-            parquetMetadataConverter.writeDataPageV2Header((int) uncompressedSize, (int) compressedSize, rows, 0, rows, org.apache.parquet.column.Encoding.PLAIN, replicationLevelBytes.length, definitionLevelBytes.length, pageHeaderOutputStream);
-            outputDataStreams.add(ParquetDataOutput.createDataOutput(Slices.wrappedBuffer(pageHeaderOutputStream.toByteArray())));
-        }
-        catch (IOException e) {
-            e.printStackTrace();
-        }
+        outputDataStreams.add(ParquetDataOutput.createDataOutput(Slices.wrappedBuffer(pageheader)));
         outputDataStreams.add(ParquetDataOutput.createDataOutput(Slices.wrappedBuffer(replicationLevelBytes)));
         outputDataStreams.add(ParquetDataOutput.createDataOutput(Slices.wrappedBuffer(definitionLevelBytes)));
         outputDataStreams.add(ParquetDataOutput.createDataOutput(Slices.wrappedBuffer(data)));
@@ -183,6 +182,7 @@ public class LongColumnWriter
         replicationLevel.reset();
 
         getDataStreamsCalled = false;
+        pageheader = null;
         data = null;
         replicationLevelBytes = null;
         definitionLevelBytes = null;
