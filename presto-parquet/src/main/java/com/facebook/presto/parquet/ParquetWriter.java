@@ -37,7 +37,7 @@ public class ParquetWriter
 {
     private final List<ColumnWriter> columnWriters;
     private final MetadataWriter metadataWriter;
-    private final OutputStream outputStream;
+    private final OutputStreamSliceOutput outputStream;
     private final List<Type> types;
 
     private boolean closed;
@@ -47,7 +47,7 @@ public class ParquetWriter
 
     public ParquetWriter(OutputStream outputStream, List<String> columnNames, List<Type> types)
     {
-        this.outputStream = requireNonNull(outputStream, "outputstream is null");
+        this.outputStream = new OutputStreamSliceOutput(requireNonNull(outputStream, "outputstream is null"));
         this.types = ImmutableList.copyOf(requireNonNull(types, "types is null"));
         this.columnWriters = ImmutableList.of(new LongColumnWriter(BigintType.BIGINT));
         this.metadataWriter = new MetadataWriter();
@@ -100,7 +100,7 @@ public class ParquetWriter
         Preconditions.checkArgument(closed, "Only support flush at last for now");
 
         List<ParquetDataOutput> outputData = new ArrayList<>();
-        long stripeStartOffset = 0;
+        long stripeStartOffset = outputStream.size();
 
         ParquetDataOutput magicOutput = ParquetDataOutput.createDataOutput(Slices.wrappedBuffer(MAGIC));
         outputData.add(magicOutput);
