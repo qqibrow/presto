@@ -170,6 +170,7 @@ public class ParquetTester
             RowPagesBuilder rowPagesBuilder = rowPagesBuilder(columnTypes);
             for (int i = 0; i < 2; ++i) {
                 rowPagesBuilder.row(values.get(i), another.get(i));
+                rowPagesBuilder.pageBreak();
             }
             List<Page> pages = rowPagesBuilder.build();
             for (Page page : pages) {
