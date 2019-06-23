@@ -17,6 +17,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.List;
 
+import static com.facebook.presto.parquet.ParquetWriterUtils.getParquetType;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkState;
 import static java.util.Objects.requireNonNull;
@@ -49,15 +50,15 @@ public class LongColumnWriter
     private byte[] replicationLevelBytes;
     private byte[] definitionLevelBytes;
 
-    public LongColumnWriter(Type type)
+    public LongColumnWriter(Type type, String name)
     {
         this.type = requireNonNull(type, "type is null");
         this.valuesWriter = new PlainValuesWriter(INITIAL_SLAB_SIZE, DEFAULT_PAGE_SIZE);
         this.definitionLevel = new RunLengthBitPackingHybridEncoder(1, INITIAL_SLAB_SIZE, DEFAULT_PAGE_SIZE);
         this.replicationLevel = new RunLengthBitPackingHybridEncoder(1, INITIAL_SLAB_SIZE, DEFAULT_PAGE_SIZE);
 
-        this.path = ImmutableList.of("test_int_type");
-        this.parquetType = org.apache.parquet.format.Type.INT64;
+        this.path = ImmutableList.of(name);
+        this.parquetType = getParquetType(type);
         this.encodings = ImmutableList.of(PLAIN);
         this.compressionCodec = CompressionCodec.UNCOMPRESSED;
     }

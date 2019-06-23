@@ -1,15 +1,14 @@
 package com.facebook.presto.parquet;
 
+import com.facebook.presto.spi.type.Type;
 import com.google.common.collect.ImmutableList;
 import io.airlift.slice.Slice;
 import io.airlift.slice.Slices;
 import org.apache.parquet.format.ColumnMetaData;
-import org.apache.parquet.format.ConvertedType;
 import org.apache.parquet.format.FieldRepetitionType;
 import org.apache.parquet.format.FileMetaData;
 import org.apache.parquet.format.RowGroup;
 import org.apache.parquet.format.SchemaElement;
-import org.apache.parquet.format.Type;
 import org.apache.parquet.format.Util;
 
 import java.io.ByteArrayOutputStream;
@@ -53,25 +52,32 @@ public class MetadataWriter
 //        return Slices.wrappedBuffer(outputStream.toByteArray());
     }
 
-    List<SchemaElement> getSchema()
+    List<SchemaElement> getSchema(List<Type> types, List<String> names)
     {
+        ImmutableList.Builder<SchemaElement> list = ImmutableList.builder();
+
         SchemaElement root = new SchemaElement();
         root.setName("presto_schema");
-        root.setNum_children(1);
+        root.setNum_children(types.size());
 
-        SchemaElement child = new SchemaElement();
-        child.setName("test_int_type");
-        child.setType(Type.INT64);
-        child.setConverted_type(ConvertedType.INT_64);
-        child.setRepetition_type(FieldRepetitionType.REQUIRED);
-        return ImmutableList.of(root, child);
+        list.add(root);
+
+        for (int i = 0; i < types.size(); i++) {
+            SchemaElement child = new SchemaElement();
+            child.setName(names.get(i));
+            child.setType(ParquetWriterUtils.getParquetType(types.get(i)));
+            child.setRepetition_type(FieldRepetitionType.REQUIRED);
+            list.add(child);
+        }
+
+        return list.build();
     }
 
-    public Slice getFooter(List<RowGroup> rowGroups)
+    public Slice getFooter(List<RowGroup> rowGroups, List<SchemaElement> schemaElements)
     {
         FileMetaData fileMetaData = new FileMetaData();
         fileMetaData.setVersion(1);
-        fileMetaData.setSchema(getSchema());
+        fileMetaData.setSchema(schemaElements);
         long totalRows = rowGroups.stream().mapToLong(RowGroup::getNum_rows).sum();
         fileMetaData.setNum_rows(totalRows);
         fileMetaData.setRow_groups(ImmutableList.copyOf(rowGroups));

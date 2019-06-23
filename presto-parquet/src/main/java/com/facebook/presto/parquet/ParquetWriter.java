@@ -13,7 +13,6 @@
  */
 package com.facebook.presto.parquet;
 
-import com.facebook.presto.spi.type.BigintType;
 import com.facebook.presto.spi.type.Type;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
@@ -46,6 +45,7 @@ public class ParquetWriter
     private final MetadataWriter metadataWriter;
     private final OutputStreamSliceOutput outputStream;
     private final List<Type> types;
+    private final List<String> names;
 
     private List<RowGroup> rowGroups = new ArrayList<>();
 
@@ -58,8 +58,17 @@ public class ParquetWriter
     public ParquetWriter(OutputStream outputStream, List<String> columnNames, List<Type> types)
     {
         this.outputStream = new OutputStreamSliceOutput(requireNonNull(outputStream, "outputstream is null"));
+
+        Preconditions.checkArgument(types.size() == columnNames.size(), "type size not equals to name size");
         this.types = ImmutableList.copyOf(requireNonNull(types, "types is null"));
-        this.columnWriters = ImmutableList.of(new LongColumnWriter(BigintType.BIGINT));
+        this.names = ImmutableList.copyOf(requireNonNull(columnNames, "columnNames is null"));
+
+        ImmutableList.Builder<ColumnWriter> columnWriterBuilder = ImmutableList.builder();
+        for (int i = 0; i < types.size(); i++) {
+            columnWriterBuilder.add(new LongColumnWriter(types.get(i), columnNames.get(i)));
+        }
+
+        this.columnWriters = columnWriterBuilder.build();
         this.metadataWriter = new MetadataWriter();
     }
 
@@ -174,7 +183,7 @@ public class ParquetWriter
     {
 
         List<ParquetDataOutput> outputData = new ArrayList<>();
-        Slice footer = metadataWriter.getFooter(rowGroups);
+        Slice footer = metadataWriter.getFooter(rowGroups, metadataWriter.getSchema(types, names));
         outputData.add(createDataOutput(footer));
 
         Slice footerSize = Slices.allocate(SIZE_OF_INT);

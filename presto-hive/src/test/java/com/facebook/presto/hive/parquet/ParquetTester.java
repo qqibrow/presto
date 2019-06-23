@@ -158,17 +158,18 @@ public class ParquetTester
             jobConf.setBoolean(ENABLE_DICTIONARY, false);
             // TODO not sure it's 2.0
             jobConf.setEnum(WRITER_VERSION, PARQUET_2_0);
-            ImmutableList<String> columnNames = ImmutableList.of("test_column_name");
-            ImmutableList<Type> columnTypes = ImmutableList.of(BIGINT);
+            ImmutableList<String> columnNames = ImmutableList.of("test_column_name1", "test_column2");
+            ImmutableList<Type> columnTypes = ImmutableList.of(BIGINT, BIGINT);
             ParquetWriter parquetWriter = new ParquetWriter(
                     new FileOutputStream(tempFile.getFile()),
                     columnNames,
                     columnTypes);
 
-            Iterable<Long> values = Arrays.asList(42L, 43L);
+            List<Object> values = Arrays.asList(42L, 43L);
+            List<Object> another = Arrays.asList(2L, 3L);
             RowPagesBuilder rowPagesBuilder = rowPagesBuilder(columnTypes);
-            for (Long value : values) {
-                rowPagesBuilder.row(value);
+            for (int i = 0; i < 2; ++i) {
+                rowPagesBuilder.row(values.get(i), another.get(i));
             }
             List<Page> pages = rowPagesBuilder.build();
             for (Page page : pages) {
@@ -176,7 +177,7 @@ public class ParquetTester
             }
             parquetWriter.close();
 
-            assertFileContents(SESSION, tempFile.getFile(), getIterators(new Iterable[] {values}), columnNames, columnTypes);
+            assertFileContents(SESSION, tempFile.getFile(), getIterators(new Iterable[] {values, another}), columnNames, columnTypes);
         }
     }
 
