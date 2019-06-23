@@ -13,6 +13,7 @@
  */
 package com.facebook.presto.hive.parquet;
 
+import com.facebook.presto.RowPagesBuilder;
 import com.facebook.presto.hive.HdfsEnvironment;
 import com.facebook.presto.hive.HiveClientConfig;
 import com.facebook.presto.hive.HiveSessionProperties;
@@ -31,7 +32,6 @@ import com.facebook.presto.spi.Page;
 import com.facebook.presto.spi.RecordCursor;
 import com.facebook.presto.spi.RecordPageSource;
 import com.facebook.presto.spi.block.Block;
-import com.facebook.presto.spi.block.BlockBuilder;
 import com.facebook.presto.spi.type.ArrayType;
 import com.facebook.presto.spi.type.DateType;
 import com.facebook.presto.spi.type.DecimalType;
@@ -85,6 +85,7 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 
+import static com.facebook.presto.RowPagesBuilder.rowPagesBuilder;
 import static com.facebook.presto.hive.AbstractTestHiveFileFormats.getFieldFromCursor;
 import static com.facebook.presto.hive.HiveTestUtils.createTestHdfsEnvironment;
 import static com.facebook.presto.hive.HiveUtil.isArrayType;
@@ -101,11 +102,11 @@ import static io.airlift.units.DataSize.succinctBytes;
 import static java.util.Arrays.stream;
 import static java.util.Collections.singletonList;
 import static org.apache.hadoop.hive.serde2.objectinspector.ObjectInspectorFactory.getStandardStructObjectInspector;
+import static org.apache.parquet.column.ParquetProperties.WriterVersion.PARQUET_2_0;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
 import static org.testng.Assert.assertTrue;
 import static parquet.column.ParquetProperties.WriterVersion.PARQUET_1_0;
-import static parquet.column.ParquetProperties.WriterVersion.PARQUET_2_0;
 import static parquet.hadoop.ParquetOutputFormat.COMPRESSION;
 import static parquet.hadoop.ParquetOutputFormat.ENABLE_DICTIONARY;
 import static parquet.hadoop.ParquetOutputFormat.WRITER_VERSION;
@@ -146,6 +147,37 @@ public class ParquetTester
         parquetTester.versions = ImmutableSet.copyOf(WriterVersion.values());
         parquetTester.sessions = ImmutableSet.of(SESSION, SESSION_USE_NAME);
         return parquetTester;
+    }
+
+    void testWriteParquetFile()
+            throws IOException
+    {
+        try (TempFile tempFile = new TempFile("test", "parquet")) {
+            JobConf jobConf = new JobConf();
+            jobConf.setEnum(COMPRESSION, UNCOMPRESSED);
+            jobConf.setBoolean(ENABLE_DICTIONARY, false);
+            // TODO not sure it's 2.0
+            jobConf.setEnum(WRITER_VERSION, PARQUET_2_0);
+            ImmutableList<String> columnNames = ImmutableList.of("test_column_name");
+            ImmutableList<Type> columnTypes = ImmutableList.of(BIGINT);
+            ParquetWriter parquetWriter = new ParquetWriter(
+                    new FileOutputStream(tempFile.getFile()),
+                    columnNames,
+                    columnTypes);
+
+            Iterable<Long> values = Arrays.asList(42L, 43L);
+            RowPagesBuilder rowPagesBuilder = rowPagesBuilder(columnTypes);
+            for (Long value : values) {
+                rowPagesBuilder.row(value);
+            }
+            List<Page> pages = rowPagesBuilder.build();
+            for (Page page : pages) {
+                parquetWriter.write(page);
+            }
+            parquetWriter.close();
+
+            assertFileContents(SESSION, tempFile.getFile(), getIterators(new Iterable[] {values}), columnNames, columnTypes);
+        }
     }
 
     public void testRoundTrip(PrimitiveObjectInspector columnObjectInspector, Iterable<?> writeValues, Type parameterType)
@@ -267,33 +299,6 @@ public class ParquetTester
             throws Exception
     {
         assertRoundTrip(objectInspectors, writeValues, readValues, columnNames, columnTypes, Optional.empty(), parquetSchema, singleLevelArray);
-    }
-
-    void testWriteParquetFile()
-            throws IOException
-    {
-        try (TempFile tempFile = new TempFile("test", "parquet")) {
-            JobConf jobConf = new JobConf();
-            jobConf.setEnum(COMPRESSION, UNCOMPRESSED);
-            jobConf.setBoolean(ENABLE_DICTIONARY, false);
-            // TODO not sure it's 2.0
-            jobConf.setEnum(WRITER_VERSION, PARQUET_2_0);
-            ImmutableList<String> columnNames = ImmutableList.of("test_column_name");
-            ImmutableList<Type> columnTypes = ImmutableList.of(BIGINT);
-            ParquetWriter parquetWriter = new ParquetWriter(
-                    new FileOutputStream(tempFile.getFile()),
-                    columnNames,
-                    columnTypes);
-
-            // write down some data
-            Iterable<Long> iterable = Arrays.asList(42L, 43L);
-            BlockBuilder blockBuilder = BIGINT.createFixedSizeBlockBuilder(2).writeLong(42L).writeLong(43L);
-            Block block = blockBuilder.build();
-            Block[] blocks = new Block[] {block};
-            parquetWriter.write(new Page(blocks));
-            parquetWriter.close();
-            assertFileContents(SESSION, tempFile.getFile(), getIterators(new Iterable[] {iterable}), columnNames, columnTypes);
-        }
     }
 
     void assertRoundTrip(List<ObjectInspector> objectInspectors,
