@@ -124,14 +124,15 @@ public class HiveFileFormatBenchmark
     @Param({
 //            "PRESTO_RCBINARY",
 //            "PRESTO_RCTEXT",
-//            "PRESTO_ORC",
+            "PRESTO_ORC",
 //            "PRESTO_DWRF",
-            "PRESTO_PARQUET",
+            //"PRESTO_PARQUET",
 //            "HIVE_RCBINARY",
 //            "HIVE_RCTEXT",
-//            "HIVE_ORC",
+            "HIVE_ORC"
 //            "HIVE_DWRF",
-            "HIVE_PARQUET"})
+            //"HIVE_PARQUET"
+            })
     private FileFormat fileFormat;
 
     private TestData data;
