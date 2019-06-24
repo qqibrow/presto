@@ -42,7 +42,7 @@ public final class ParquetWriterUtils
         if (type instanceof VarcharType || type instanceof CharType) {
             return (block, i) -> {
                 Slice slice = type.getSlice(block, i);
-                valuesWriter.writeBytes(Binary.fromConstantByteArray(slice.getBytes()));
+                valuesWriter.writeBytes(Binary.fromConstantByteArray((byte[]) slice.getBase(), 0, slice.length()));
             };
         }
 //        if (DATE.equals(type)) {
