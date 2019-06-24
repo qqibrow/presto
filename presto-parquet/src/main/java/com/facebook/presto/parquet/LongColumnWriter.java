@@ -4,24 +4,26 @@ import com.facebook.presto.spi.block.Block;
 import com.facebook.presto.spi.type.Type;
 import com.google.common.collect.ImmutableList;
 import io.airlift.slice.Slices;
-import org.apache.parquet.format.Encoding;
+import org.apache.parquet.bytes.BytesInput;
+import org.apache.parquet.bytes.HeapByteBufferAllocator;
+import org.apache.parquet.column.values.ValuesWriter;
+import org.apache.parquet.column.values.plain.PlainValuesWriter;
+import org.apache.parquet.column.values.rle.RunLengthBitPackingHybridEncoder;
 import org.apache.parquet.format.ColumnMetaData;
 import org.apache.parquet.format.CompressionCodec;
+import org.apache.parquet.format.Encoding;
 import org.apache.parquet.format.converter.ParquetMetadataConverter;
-import parquet.bytes.BytesInput;
-import parquet.column.values.ValuesWriter;
-import parquet.column.values.plain.PlainValuesWriter;
-import parquet.column.values.rle.RunLengthBitPackingHybridEncoder;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.List;
+import java.util.function.BiConsumer;
 
 import static com.facebook.presto.parquet.ParquetWriterUtils.getParquetType;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkState;
 import static java.util.Objects.requireNonNull;
-import static org.apache.parquet.format.Encoding.*;
+import static org.apache.parquet.format.Encoding.PLAIN;
 
 public class LongColumnWriter
         implements ColumnWriter
@@ -32,6 +34,7 @@ public class LongColumnWriter
     private final Type type;
     private final List<String> path;
     private final List<Encoding> encodings;
+    private final BiConsumer<Block, Integer> writer;
     CompressionCodec compressionCodec;
 
     private final org.apache.parquet.format.Type parquetType;
@@ -53,9 +56,11 @@ public class LongColumnWriter
     public LongColumnWriter(Type type, String name)
     {
         this.type = requireNonNull(type, "type is null");
-        this.valuesWriter = new PlainValuesWriter(INITIAL_SLAB_SIZE, DEFAULT_PAGE_SIZE);
-        this.definitionLevel = new RunLengthBitPackingHybridEncoder(1, INITIAL_SLAB_SIZE, DEFAULT_PAGE_SIZE);
-        this.replicationLevel = new RunLengthBitPackingHybridEncoder(1, INITIAL_SLAB_SIZE, DEFAULT_PAGE_SIZE);
+        HeapByteBufferAllocator allocator = new HeapByteBufferAllocator();
+        this.valuesWriter = new PlainValuesWriter(INITIAL_SLAB_SIZE, DEFAULT_PAGE_SIZE, allocator);
+        this.definitionLevel = new RunLengthBitPackingHybridEncoder(1, INITIAL_SLAB_SIZE, DEFAULT_PAGE_SIZE, allocator);
+        this.replicationLevel = new RunLengthBitPackingHybridEncoder(1, INITIAL_SLAB_SIZE, DEFAULT_PAGE_SIZE, allocator);
+        this.writer = ParquetWriterUtils.getWriter(this.type, valuesWriter);
 
         this.path = ImmutableList.of(name);
         this.parquetType = getParquetType(type);
@@ -80,8 +85,7 @@ public class LongColumnWriter
         // record values
         for (int position = 0; position < block.getPositionCount(); position++) {
             if (!block.isNull(position)) {
-                long value = type.getLong(block, position);
-                valuesWriter.writeLong(value);
+                writer.accept(block, position);
                 try {
                     definitionLevel.writeInt(1);
                     replicationLevel.writeInt(0);

@@ -35,6 +35,7 @@ import com.facebook.presto.spi.block.Block;
 import com.facebook.presto.spi.type.ArrayType;
 import com.facebook.presto.spi.type.DateType;
 import com.facebook.presto.spi.type.DecimalType;
+import com.facebook.presto.spi.type.IntegerType;
 import com.facebook.presto.spi.type.MapType;
 import com.facebook.presto.spi.type.SqlDate;
 import com.facebook.presto.spi.type.SqlDecimal;
@@ -42,6 +43,7 @@ import com.facebook.presto.spi.type.SqlTimestamp;
 import com.facebook.presto.spi.type.SqlVarbinary;
 import com.facebook.presto.spi.type.TimestampType;
 import com.facebook.presto.spi.type.Type;
+import com.facebook.presto.spi.type.VarcharType;
 import com.facebook.presto.testing.TestingConnectorSession;
 import com.google.common.base.Function;
 import com.google.common.base.Joiner;
@@ -158,18 +160,19 @@ public class ParquetTester
             jobConf.setBoolean(ENABLE_DICTIONARY, false);
             // TODO not sure it's 2.0
             jobConf.setEnum(WRITER_VERSION, PARQUET_2_0);
-            ImmutableList<String> columnNames = ImmutableList.of("test_column_name1", "test_column2");
-            ImmutableList<Type> columnTypes = ImmutableList.of(BIGINT, BIGINT);
+            ImmutableList<String> columnNames = ImmutableList.of("test_column_name1", "test_column2", "name");
+            ImmutableList<Type> columnTypes = ImmutableList.of(BIGINT, IntegerType.INTEGER, VarcharType.VARCHAR);
             ParquetWriter parquetWriter = new ParquetWriter(
                     new FileOutputStream(tempFile.getFile()),
                     columnNames,
                     columnTypes);
 
             List<Object> values = Arrays.asList(42L, 43L);
-            List<Object> another = Arrays.asList(2L, 3L);
+            List<Object> another = Arrays.asList(2, 3);
+            List<Object> varchars = Arrays.asList("hello", "world");
             RowPagesBuilder rowPagesBuilder = rowPagesBuilder(columnTypes);
             for (int i = 0; i < 2; ++i) {
-                rowPagesBuilder.row(values.get(i), another.get(i));
+                rowPagesBuilder.row(values.get(i), another.get(i), varchars.get(i));
                 rowPagesBuilder.pageBreak();
             }
             List<Page> pages = rowPagesBuilder.build();
@@ -178,7 +181,7 @@ public class ParquetTester
             }
             parquetWriter.close();
 
-            assertFileContents(SESSION, tempFile.getFile(), getIterators(new Iterable[] {values, another}), columnNames, columnTypes);
+            assertFileContents(SESSION, tempFile.getFile(), getIterators(new Iterable[] {values, another, varchars}), columnNames, columnTypes);
         }
     }
 
