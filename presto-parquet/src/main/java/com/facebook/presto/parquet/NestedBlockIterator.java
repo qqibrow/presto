@@ -140,6 +140,7 @@ public class NestedBlockIterator
                     builder.add(Optional.of(maxDefinitionLevel - 1));
                 }
                 else {
+                    Preconditions.checkArgument(columnarArray.getLength(i) > 0);
                     for (int j = 0; j < columnarArray.getLength(i); ++j) {
                         builder.add(Optional.empty());
                     }
@@ -165,6 +166,7 @@ public class NestedBlockIterator
                         builder.add(Optional.of(maxDefinitionLevel - 1));
                     }
                     else {
+                        Preconditions.checkArgument(columnarArray.getLength(index) > 0);
                         for (int j = 0; j < columnarArray.getLength(index); ++j) {
                             builder.add(Optional.empty());
                         }
