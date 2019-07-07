@@ -16,7 +16,9 @@ import org.apache.parquet.format.converter.ParquetMetadataConverter;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Optional;
 import java.util.function.BiConsumer;
 
 import static com.facebook.presto.parquet.ParquetWriterUtils.getParquetType;
@@ -47,53 +49,83 @@ public class LongColumnWriter
     private boolean closed;
     private boolean getDataStreamsCalled;
     private int rows;
+    private int nullCounts;
 
     private byte[] pageheader;
     private byte[] data;
     private byte[] replicationLevelBytes;
     private byte[] definitionLevelBytes;
 
-    public LongColumnWriter(Type type, String name)
+    private final int maxDefinitionLevel;
+
+    public LongColumnWriter(Type type, List<String> name, int maxDefinitionLevel)
     {
         this.type = requireNonNull(type, "type is null");
-        HeapByteBufferAllocator allocator = new HeapByteBufferAllocator();
+        HeapByteBufferAllocator allocator = HeapByteBufferAllocator.getInstance();
         this.valuesWriter = new PlainValuesWriter(INITIAL_SLAB_SIZE, DEFAULT_PAGE_SIZE, allocator);
         this.definitionLevel = new RunLengthBitPackingHybridEncoder(1, INITIAL_SLAB_SIZE, DEFAULT_PAGE_SIZE, allocator);
         this.replicationLevel = new RunLengthBitPackingHybridEncoder(1, INITIAL_SLAB_SIZE, DEFAULT_PAGE_SIZE, allocator);
         this.writer = ParquetWriterUtils.getWriter(this.type, valuesWriter);
 
-        this.path = ImmutableList.of(name);
+        this.path = ImmutableList.copyOf(name);
         this.parquetType = getParquetType(type);
         this.encodings = ImmutableList.of(PLAIN);
         this.compressionCodec = CompressionCodec.UNCOMPRESSED;
+        this.maxDefinitionLevel = maxDefinitionLevel;
     }
 
     @Override
-    public void writeBlock(Block block)
+    public void writeBlock(ColumnTrunk columnTrunk)
     {
         checkState(!closed);
-        checkArgument(block.getPositionCount() > 0, "Block is empty");
 
-        // record nulls
-        for (int position = 0; position < block.getPositionCount(); position++) {
-            // TODO deal with null value
-            if (block.isNull(position)) {
-                throw new UnsupportedOperationException("Not support null value yet");
-            }
+        // empty iterator
+        ColumnTrunk current;
+        if (!columnTrunk.getDefIterator().hasNext()) {
+            current = new ColumnTrunk(columnTrunk.getBlock(),
+                    new NestedBlockIterator.PrimitiveIterator(columnTrunk.getBlock(), maxDefinitionLevel),
+                    new RepetitionValueIterator.BlockIterator(columnTrunk.getBlock()));
+        }
+        else {
+            current = new ColumnTrunk(columnTrunk.getBlock(),
+                    new NestedBlockIterator.PrimitiveIterator(columnTrunk.getDefIterator(), columnTrunk.getBlock(), maxDefinitionLevel),
+                    new RepetitionValueIterator.BlockIterator(columnTrunk.getRepIterator(), columnTrunk.getBlock()));
         }
 
         // record values
-        for (int position = 0; position < block.getPositionCount(); position++) {
-            if (!block.isNull(position)) {
-                writer.accept(block, position);
-                try {
-                    definitionLevel.writeInt(1);
-                    replicationLevel.writeInt(0);
-                }
-                catch (IOException e) {
-                    e.printStackTrace();
+        checkArgument(current.getBlock().getPositionCount() > 0, "Block is empty");
+        for (int position = 0; position < current.getBlock().getPositionCount(); position++) {
+            if (!current.getBlock().isNull(position)) {
+                writer.accept(current.getBlock(), position);
+            }
+        }
+
+        // write definitionLevels
+        Iterator<Optional<Integer>> defIterator = current.getDefIterator();
+        while (defIterator.hasNext()) {
+            Optional<Integer> next = defIterator.next();
+            checkArgument(next.isPresent());
+            try {
+                definitionLevel.writeInt(next.get());
+                if (next.get() != maxDefinitionLevel) {
+                    nullCounts++;
                 }
                 rows++;
+            }
+            catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+
+        // write reptitionLevel
+        Iterator<RepetitionValueIterator.RepetitionValue> repIterator = current.getRepIterator();
+        while (repIterator.hasNext()) {
+            RepetitionValueIterator.RepetitionValue next = repIterator.next();
+            try {
+                replicationLevel.writeInt(next.getValue());
+            }
+            catch (IOException e) {
+                e.printStackTrace();
             }
         }
     }
@@ -106,13 +138,13 @@ public class LongColumnWriter
 
     // Returns ColumnMetaData that offset is invalid
     @Override
-    public ColumnMetaData getColumnMetaData()
+    public List<ColumnMetaData> getColumnMetaData()
     {
         checkState(closed);
         checkState(getDataStreamsCalled);
 
         long totalBytes = pageheader.length + data.length + replicationLevelBytes.length + definitionLevelBytes.length;
-        return new ColumnMetaData(
+        return ImmutableList.of(new ColumnMetaData(
                 parquetType,
                 encodings,
                 path,
@@ -120,7 +152,7 @@ public class LongColumnWriter
                 rows,
                 totalBytes,
                 totalBytes,
-                0);
+                0));
     }
 
     // page header
@@ -143,7 +175,7 @@ public class LongColumnWriter
             long compressedSize = uncompressedSize;
 
             ByteArrayOutputStream pageHeaderOutputStream = new ByteArrayOutputStream();
-            parquetMetadataConverter.writeDataPageV2Header((int) uncompressedSize, (int) compressedSize, rows, 0, rows, org.apache.parquet.column.Encoding.PLAIN, replicationLevelBytes.length, definitionLevelBytes.length, pageHeaderOutputStream);
+            parquetMetadataConverter.writeDataPageV2Header((int) uncompressedSize, (int) compressedSize, rows, nullCounts, rows, org.apache.parquet.column.Encoding.PLAIN, replicationLevelBytes.length, definitionLevelBytes.length, pageHeaderOutputStream);
             pageheader = pageHeaderOutputStream.toByteArray();
         }
         catch (IOException e) {
@@ -165,16 +197,9 @@ public class LongColumnWriter
         return valuesWriter.getBufferedSize() + definitionLevel.getBufferedSize() + replicationLevel.getBufferedSize();
     }
 
-    @Override
     public long getRetainedBytes()
     {
         return valuesWriter.getAllocatedSize() + definitionLevel.getAllocatedSize() + replicationLevel.getAllocatedSize();
-    }
-
-    @Override
-    public int getRows()
-    {
-        return rows;
     }
 
     @Override
@@ -182,6 +207,7 @@ public class LongColumnWriter
     {
         closed = false;
         rows = 0;
+        nullCounts = 0;
         valuesWriter.reset();
         definitionLevel.reset();
         replicationLevel.reset();

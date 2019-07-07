@@ -13,6 +13,7 @@
  */
 package com.facebook.presto.parquet;
 
+import com.facebook.presto.spi.type.BigintType;
 import com.facebook.presto.spi.type.Type;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
@@ -22,11 +23,15 @@ import io.airlift.slice.Slices;
 import org.apache.parquet.format.ColumnChunk;
 import org.apache.parquet.format.ColumnMetaData;
 import org.apache.parquet.format.RowGroup;
+import org.apache.parquet.schema.GroupType;
+import org.apache.parquet.schema.MessageType;
+import org.apache.parquet.schema.PrimitiveType;
 
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 
 import static com.facebook.presto.parquet.ParquetDataOutput.createDataOutput;
@@ -55,6 +60,85 @@ public class ParquetWriter
 
     public static final byte[] MAGIC = "PAR1".getBytes(US_ASCII);
 
+    private static class WriteBuilder
+            extends ParquetTypeVisitor<ColumnWriter>
+    {
+        private final MessageType type;
+        private final ImmutableList.Builder<ColumnWriter> builder = ImmutableList.builder();
+
+        WriteBuilder(MessageType type)
+        {
+            this.type = type;
+        }
+
+        List<ColumnWriter> build()
+        {
+            return builder.build();
+        }
+
+        @Override
+        public ColumnWriter message(MessageType message, List<ColumnWriter> fields)
+        {
+            builder.addAll(fields);
+            return super.message(message, fields);
+        }
+
+        @Override
+        public ColumnWriter struct(GroupType struct, List<ColumnWriter> fields)
+        {
+            int fieldDefinitionLevel = type.getMaxDefinitionLevel(path(struct.getName()));
+            int fieldRepetitionLevel = type.getMaxRepetitionLevel(path(struct.getName()));
+            return new StructColumnWriter(ImmutableList.copyOf(fields), fieldDefinitionLevel, fieldRepetitionLevel);
+        }
+
+        @Override
+        public ColumnWriter list(GroupType array, ColumnWriter element)
+        {
+            throw new UnsupportedOperationException("not supported");
+        }
+
+        @Override
+        public ColumnWriter map(GroupType map, ColumnWriter key, ColumnWriter value)
+        {
+            throw new UnsupportedOperationException("not supported");
+        }
+
+        @Override
+        public ColumnWriter primitive(PrimitiveType primitive)
+        {
+            String[] repeatedPath = currentPath();
+            int repeatedD = type.getMaxDefinitionLevel(repeatedPath);
+            return new LongColumnWriter(BigintType.BIGINT, ImmutableList.copyOf(repeatedPath), repeatedD);
+        }
+
+        private String[] currentPath()
+        {
+            String[] path = new String[fieldNames.size()];
+            if (!fieldNames.isEmpty()) {
+                Iterator<String> iter = fieldNames.descendingIterator();
+                for (int i = 0; iter.hasNext(); i += 1) {
+                    path[i] = iter.next();
+                }
+            }
+
+            return path;
+        }
+
+        private String[] path(String name)
+        {
+            String[] path = new String[fieldNames.size() + 1];
+            path[fieldNames.size()] = name;
+
+            if (!fieldNames.isEmpty()) {
+                Iterator<String> iter = fieldNames.descendingIterator();
+                for (int i = 0; iter.hasNext(); i += 1) {
+                    path[i] = iter.next();
+                }
+            }
+            return path;
+        }
+    }
+
     public ParquetWriter(OutputStream outputStream, List<String> columnNames, List<Type> types)
     {
         this.outputStream = new OutputStreamSliceOutput(requireNonNull(outputStream, "outputstream is null"));
@@ -63,12 +147,11 @@ public class ParquetWriter
         this.types = ImmutableList.copyOf(requireNonNull(types, "types is null"));
         this.names = ImmutableList.copyOf(requireNonNull(columnNames, "columnNames is null"));
 
-        ImmutableList.Builder<ColumnWriter> columnWriterBuilder = ImmutableList.builder();
-        for (int i = 0; i < types.size(); i++) {
-            columnWriterBuilder.add(new LongColumnWriter(types.get(i), columnNames.get(i)));
-        }
-
-        this.columnWriters = columnWriterBuilder.build();
+        MessageType messageType = ParquetSchemaConverter.convert(types, names);
+        System.out.println(messageType);
+        WriteBuilder writeBuilder = new WriteBuilder(messageType);
+        ParquetTypeVisitor.visit(messageType, writeBuilder);
+        this.columnWriters = writeBuilder.build();
         this.metadataWriter = new MetadataWriter();
     }
 
@@ -85,7 +168,7 @@ public class ParquetWriter
         int bufferedBytes = 0;
         for (int channel = 0; channel < page.getChannelCount(); channel++) {
             ColumnWriter writer = columnWriters.get(channel);
-            writer.writeBlock(page.getBlock(channel));
+            writer.writeBlock(new ColumnTrunk(page.getBlock(channel)));
             bufferedBytes += writer.getBufferedBytes();
         }
 
@@ -135,7 +218,7 @@ public class ParquetWriter
         List<ColumnMetaData> columnMetaDatas = new ArrayList<>();
         for (ColumnWriter columnWriter : columnWriters) {
             List<ParquetDataOutput> streams = columnWriter.getDataStreams();
-            columnMetaDatas.add(columnWriter.getColumnMetaData());
+            columnMetaDatas.addAll(columnWriter.getColumnMetaData());
             outputData.addAll(streams);
         }
 
