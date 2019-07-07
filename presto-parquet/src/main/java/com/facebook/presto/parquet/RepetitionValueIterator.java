@@ -3,17 +3,16 @@ package com.facebook.presto.parquet;
 import com.facebook.presto.spi.block.Block;
 import com.facebook.presto.spi.block.ColumnarArray;
 import com.google.common.base.Preconditions;
-import com.google.common.collect.AbstractIterator;
 import com.google.common.collect.ImmutableList;
 
 import java.util.Iterator;
-import java.util.Optional;
+import java.util.List;
 
-public class RepetitionValueIterator
+public interface RepetitionValueIterator
 {
-    private static final Optional<Integer> NULL = Optional.of(-1);
+    Iterator<RepetitionValue> iterator();
 
-    static class RepetitionValue
+    class RepetitionValue
     {
         private final int value;
         private final boolean isNull;
@@ -45,10 +44,10 @@ public class RepetitionValueIterator
         return new RepetitionValue(value, false);
     }
 
-    static class ArrayIterator
-            extends AbstractIterator<RepetitionValue>
+    class ArrayIterator
+            implements RepetitionValueIterator
     {
-        private final Iterator<RepetitionValue> iterator;
+        private final List<RepetitionValue> list;
 
         ArrayIterator(ColumnarArray columnarArray)
         {
@@ -70,7 +69,7 @@ public class RepetitionValueIterator
                     }
                 }
             }
-            this.iterator = builder.build().iterator();
+            this.list = builder.build();
         }
 
         ArrayIterator(Iterator<RepetitionValue> parent, ColumnarArray columnarArray, int maxRepititionLevel)
@@ -101,23 +100,20 @@ public class RepetitionValueIterator
                 }
             }
             Preconditions.checkArgument(index == columnarArray.getPositionCount(), "index is not length of columnarArray");
-            this.iterator = builder.build().iterator();
+            this.list = builder.build();
         }
 
         @Override
-        protected RepetitionValue computeNext()
+        public Iterator<RepetitionValue> iterator()
         {
-            if (iterator.hasNext()) {
-                return iterator.next();
-            }
-            return endOfData();
+            return list.iterator();
         }
     }
 
     static class BlockIterator
-            extends AbstractIterator<RepetitionValue>
+        implements RepetitionValueIterator
     {
-        private final Iterator<RepetitionValue> iterator;
+        private final List<RepetitionValue> list;
 
         BlockIterator(Block nullCheckBlock)
         {
@@ -130,7 +126,7 @@ public class RepetitionValueIterator
                     builder.add(nonNullValue(0));
                 }
             }
-            this.iterator = builder.build().iterator();
+            this.list = builder.build();
         }
 
         BlockIterator(Iterator<RepetitionValue> parent, Block nullCheckBlock)
@@ -153,16 +149,13 @@ public class RepetitionValueIterator
                 }
             }
             Preconditions.checkArgument(index == nullCheckBlock.getPositionCount(), "index is not length of block");
-            this.iterator = builder.build().iterator();
+            this.list = builder.build();
         }
 
         @Override
-        protected RepetitionValue computeNext()
+        public Iterator<RepetitionValue> iterator()
         {
-            if (iterator.hasNext()) {
-                return iterator.next();
-            }
-            return endOfData();
+            return list.iterator();
         }
     }
 }

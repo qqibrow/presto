@@ -4,20 +4,20 @@ import com.facebook.presto.spi.block.Block;
 import com.facebook.presto.spi.block.ColumnarArray;
 import com.facebook.presto.spi.block.ColumnarRow;
 import com.google.common.base.Preconditions;
-import com.google.common.collect.AbstractIterator;
 import com.google.common.collect.ImmutableList;
 
 import java.util.Iterator;
+import java.util.List;
 import java.util.Optional;
 
-import static java.util.Objects.requireNonNull;
-
-public class NestedBlockIterator
+public interface DefinitionValueIterator
 {
-    static class PrimitiveIterator
-            extends AbstractIterator<Optional<Integer>>
+    Iterator<Optional<Integer>> iterator();
+
+    class PrimitiveIterator
+            implements DefinitionValueIterator
     {
-        private final Iterator<Optional<Integer>> iterator;
+        private final List<Optional<Integer>> list;
 
         PrimitiveIterator(Block block, int maxDefinitionLevel)
         {
@@ -30,7 +30,7 @@ public class NestedBlockIterator
                     builder.add(Optional.of(maxDefinitionLevel));
                 }
             }
-            this.iterator = builder.build().iterator();
+            this.list = builder.build();
         }
 
         PrimitiveIterator(Iterator<Optional<Integer>> parent, Block block, int maxDefinitionLevel)
@@ -53,31 +53,23 @@ public class NestedBlockIterator
                 }
             }
             Preconditions.checkArgument(index == block.getPositionCount(), "index is not length of block");
-            this.iterator = builder.build().iterator();
+            this.list = builder.build();
         }
 
         @Override
-        protected Optional<Integer> computeNext()
+        public Iterator<Optional<Integer>> iterator()
         {
-            if (iterator.hasNext()) {
-                return iterator.next();
-            }
-            return endOfData();
+            return list.iterator();
         }
     }
 
-    static class RowIterator
-            extends AbstractIterator<Optional<Integer>>
+    class RowIterator
+            implements DefinitionValueIterator
     {
-        private final ColumnarRow columnarRow;
-        private final int maxDefinitionLevel;
-        private final Iterator<Optional<Integer>> iterator;
+        private final List<Optional<Integer>> list;
 
         RowIterator(ColumnarRow columnarRow, int maxDefinitionLevel)
         {
-            this.columnarRow = requireNonNull(columnarRow, "columnarRow is null");
-            this.maxDefinitionLevel = maxDefinitionLevel;
-
             ImmutableList.Builder<Optional<Integer>> builder = ImmutableList.builder();
             for (int i = 0; i < columnarRow.getPositionCount(); i++) {
                 if (columnarRow.isNull(i)) {
@@ -87,14 +79,11 @@ public class NestedBlockIterator
                     builder.add(Optional.empty());
                 }
             }
-            this.iterator = builder.build().iterator();
+            this.list = builder.build();
         }
 
         RowIterator(Iterator<Optional<Integer>> parent, ColumnarRow columnarRow, int maxDefinitionLevel)
         {
-            this.columnarRow = requireNonNull(columnarRow, "columnarRow is null");
-            this.maxDefinitionLevel = maxDefinitionLevel;
-
             ImmutableList.Builder<Optional<Integer>> builder = ImmutableList.builder();
             int index = 0;
             while (parent.hasNext()) {
@@ -109,31 +98,23 @@ public class NestedBlockIterator
                 }
             }
             Preconditions.checkArgument(index == columnarRow.getPositionCount(), "index is not length of columnarRow");
-            this.iterator = builder.build().iterator();
+            this.list = builder.build();
         }
 
         @Override
-        protected Optional<Integer> computeNext()
+        public Iterator<Optional<Integer>> iterator()
         {
-            if (iterator.hasNext()) {
-                return iterator.next();
-            }
-            return endOfData();
+            return list.iterator();
         }
     }
 
-    static class ArrayIterator
-            extends AbstractIterator<Optional<Integer>>
+    class ArrayIterator
+            implements DefinitionValueIterator
     {
-        private final ColumnarArray columnarArray;
-        private final int maxDefinitionLevel;
-        private Iterator<Optional<Integer>> iterator;
+        private List<Optional<Integer>> list;
 
         ArrayIterator(ColumnarArray columnarArray, int maxDefinitionLevel)
         {
-            this.columnarArray = requireNonNull(columnarArray, "columnarArray is null");
-            this.maxDefinitionLevel = maxDefinitionLevel;
-
             ImmutableList.Builder<Optional<Integer>> builder = ImmutableList.builder();
             for (int i = 0; i < columnarArray.getPositionCount(); ++i) {
                 if (columnarArray.isNull(i)) {
@@ -146,14 +127,11 @@ public class NestedBlockIterator
                     }
                 }
             }
-            iterator = builder.build().iterator();
+            list = builder.build();
         }
 
         ArrayIterator(Iterator<Optional<Integer>> parent, ColumnarArray columnarArray, int maxDefinitionLevel)
         {
-            this.columnarArray = requireNonNull(columnarArray, "columnarArray is null");
-            this.maxDefinitionLevel = maxDefinitionLevel;
-
             ImmutableList.Builder<Optional<Integer>> builder = ImmutableList.builder();
             int index = 0;
             while (parent.hasNext()) {
@@ -175,16 +153,13 @@ public class NestedBlockIterator
                 }
             }
             Preconditions.checkArgument(index == columnarArray.getPositionCount(), "index is not length of columnarArray");
-            iterator = builder.build().iterator();
+            list = builder.build();
         }
 
         @Override
-        protected Optional<Integer> computeNext()
+        public Iterator<Optional<Integer>> iterator()
         {
-            if (iterator.hasNext()) {
-                return iterator.next();
-            }
-            return endOfData();
+            return list.iterator();
         }
     }
 }

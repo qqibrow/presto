@@ -14,7 +14,9 @@
 package com.facebook.presto.parquet;
 
 import com.facebook.presto.spi.type.BigintType;
+import com.facebook.presto.spi.type.IntegerType;
 import com.facebook.presto.spi.type.Type;
+import com.facebook.presto.spi.type.VarcharType;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import io.airlift.slice.OutputStreamSliceOutput;
@@ -108,7 +110,21 @@ public class ParquetWriter
         {
             String[] repeatedPath = currentPath();
             int repeatedD = type.getMaxDefinitionLevel(repeatedPath);
-            return new LongColumnWriter(BigintType.BIGINT, ImmutableList.copyOf(repeatedPath), repeatedD);
+            return new LongColumnWriter(getType(primitive), ImmutableList.copyOf(repeatedPath), repeatedD);
+        }
+
+        Type getType(PrimitiveType primitive)
+        {
+            switch (primitive.getPrimitiveTypeName()) {
+                case BINARY:
+                    return VarcharType.VARCHAR;
+                case INT32:
+                    return IntegerType.INTEGER;
+                case INT64:
+                    return BigintType.BIGINT;
+                default:
+                    throw new UnsupportedOperationException("Unsupported type: " + primitive);
+            }
         }
 
         private String[] currentPath()

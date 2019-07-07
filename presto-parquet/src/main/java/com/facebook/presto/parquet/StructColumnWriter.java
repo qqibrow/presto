@@ -33,14 +33,16 @@ public class StructColumnWriter
             ColumnWriter columnWriter = structFields.get(i);
             Block block = columnarRow.getField(i);
             ColumnTrunk current;
+
+            // TODO this is incorrect?
             if (!columnTrunk.getDefIterator().hasNext()) {
                 current = new ColumnTrunk(columnTrunk.getBlock(),
-                        new NestedBlockIterator.RowIterator(columnarRow, maxDefinitionLevel),
+                        new DefinitionValueIterator.RowIterator(columnarRow, maxDefinitionLevel),
                         new RepetitionValueIterator.BlockIterator(block));
             }
             else {
                 current = new ColumnTrunk(columnTrunk.getBlock(),
-                        new NestedBlockIterator.RowIterator(columnTrunk.getDefIterator(), columnarRow, maxDefinitionLevel),
+                        new DefinitionValueIterator.RowIterator(columnTrunk.getDefIterator(), columnarRow, maxDefinitionLevel),
                         new RepetitionValueIterator.BlockIterator(columnTrunk.getRepIterator(), block));
             }
             columnWriter.writeBlock(current);

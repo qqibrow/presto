@@ -83,12 +83,12 @@ public class LongColumnWriter
         ColumnTrunk current;
         if (!columnTrunk.getDefIterator().hasNext()) {
             current = new ColumnTrunk(columnTrunk.getBlock(),
-                    new NestedBlockIterator.PrimitiveIterator(columnTrunk.getBlock(), maxDefinitionLevel),
+                    new DefinitionValueIterator.PrimitiveIterator(columnTrunk.getBlock(), maxDefinitionLevel),
                     new RepetitionValueIterator.BlockIterator(columnTrunk.getBlock()));
         }
         else {
             current = new ColumnTrunk(columnTrunk.getBlock(),
-                    new NestedBlockIterator.PrimitiveIterator(columnTrunk.getDefIterator(), columnTrunk.getBlock(), maxDefinitionLevel),
+                    new DefinitionValueIterator.PrimitiveIterator(columnTrunk.getDefIterator(), columnTrunk.getBlock(), maxDefinitionLevel),
                     new RepetitionValueIterator.BlockIterator(columnTrunk.getRepIterator(), columnTrunk.getBlock()));
         }
 

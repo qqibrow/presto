@@ -9,21 +9,21 @@ import java.util.Optional;
 public class ColumnTrunk
 {
     private final Block block;
-    private final Iterator<Optional<Integer>> defIterator;
-    private final Iterator<RepetitionValueIterator.RepetitionValue> repIterator;
+    private final DefinitionValueIterator defIterator;
+    private final RepetitionValueIterator repIterator;
 
     ColumnTrunk(Block block)
     {
         this.block = block;
-        this.defIterator = Collections.emptyIterator();
-        this.repIterator = Collections.emptyIterator();
+        this.defIterator = null;
+        this.repIterator = null;
     }
 
-    ColumnTrunk(Block block, Iterator<Optional<Integer>> defIterator, Iterator<RepetitionValueIterator.RepetitionValue> repIterator)
+    ColumnTrunk(Block block, DefinitionValueIterator defIterator, RepetitionValueIterator repIterator)
     {
         this.block = block;
-        this.defIterator = Collections.emptyIterator();
-        this.repIterator = Collections.emptyIterator();
+        this.defIterator = defIterator;
+        this.repIterator = repIterator;
     }
 
     public Block getBlock()
@@ -33,11 +33,11 @@ public class ColumnTrunk
 
     public Iterator<Optional<Integer>> getDefIterator()
     {
-        return defIterator;
+        return defIterator == null ? Collections.emptyIterator() : defIterator.iterator();
     }
 
     public Iterator<RepetitionValueIterator.RepetitionValue> getRepIterator()
     {
-        return repIterator;
+        return repIterator == null ? Collections.emptyIterator() : repIterator.iterator();
     }
 }
