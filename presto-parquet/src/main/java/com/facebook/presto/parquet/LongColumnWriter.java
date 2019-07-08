@@ -16,9 +16,7 @@ import org.apache.parquet.format.converter.ParquetMetadataConverter;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.util.Iterator;
 import java.util.List;
-import java.util.Optional;
 import java.util.function.BiConsumer;
 
 import static com.facebook.presto.parquet.ParquetWriterUtils.getParquetType;
@@ -97,37 +95,45 @@ public class LongColumnWriter
         for (int position = 0; position < current.getBlock().getPositionCount(); position++) {
             if (!current.getBlock().isNull(position)) {
                 writer.accept(current.getBlock(), position);
-            }
-        }
-
-        // write definitionLevels
-        Iterator<Optional<Integer>> defIterator = current.getDefIterator();
-        while (defIterator.hasNext()) {
-            Optional<Integer> next = defIterator.next();
-            checkArgument(next.isPresent());
-            try {
-                definitionLevel.writeInt(next.get());
-                if (next.get() != maxDefinitionLevel) {
-                    nullCounts++;
+                try {
+                    definitionLevel.writeInt(2);
+                    replicationLevel.writeInt(0);
+                }
+                catch (IOException e) {
+                    e.printStackTrace();
                 }
                 rows++;
             }
-            catch (IOException e) {
-                e.printStackTrace();
-            }
         }
 
-        // write reptitionLevel
-        Iterator<RepetitionValueIterator.RepetitionValue> repIterator = current.getRepIterator();
-        while (repIterator.hasNext()) {
-            RepetitionValueIterator.RepetitionValue next = repIterator.next();
-            try {
-                replicationLevel.writeInt(next.getValue());
-            }
-            catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
+//        // write definitionLevels
+//        Iterator<Optional<Integer>> defIterator = current.getDefIterator();
+//        while (defIterator.hasNext()) {
+//            Optional<Integer> next = defIterator.next();
+//            checkArgument(next.isPresent());
+//            try {
+//                definitionLevel.writeInt(next.get());
+//                if (next.get() != maxDefinitionLevel) {
+//                    nullCounts++;
+//                }
+//                rows++;
+//            }
+//            catch (IOException e) {
+//                e.printStackTrace();
+//            }
+//        }
+//
+//        // write reptitionLevel
+//        Iterator<RepetitionValueIterator.RepetitionValue> repIterator = current.getRepIterator();
+//        while (repIterator.hasNext()) {
+//            RepetitionValueIterator.RepetitionValue next = repIterator.next();
+//            try {
+//                replicationLevel.writeInt(next.getValue());
+//            }
+//            catch (IOException e) {
+//                e.printStackTrace();
+//            }
+//        }
     }
 
     @Override
