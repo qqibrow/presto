@@ -53,6 +53,7 @@ public class ParquetWriter
     private final OutputStreamSliceOutput outputStream;
     private final List<Type> types;
     private final List<String> names;
+    private final MessageType messageType;
 
     private List<RowGroup> rowGroups = new ArrayList<>();
 
@@ -163,7 +164,7 @@ public class ParquetWriter
         this.types = ImmutableList.copyOf(requireNonNull(types, "types is null"));
         this.names = ImmutableList.copyOf(requireNonNull(columnNames, "columnNames is null"));
 
-        MessageType messageType = ParquetSchemaConverter.convert(types, names);
+        this.messageType = ParquetSchemaConverter.convert(types, names);
         System.out.println(messageType);
         WriteBuilder writeBuilder = new WriteBuilder(messageType);
         ParquetTypeVisitor.visit(messageType, writeBuilder);
@@ -282,7 +283,7 @@ public class ParquetWriter
     {
 
         List<ParquetDataOutput> outputData = new ArrayList<>();
-        Slice footer = metadataWriter.getFooter(rowGroups, metadataWriter.getSchema(types, names));
+        Slice footer = metadataWriter.getFooter(rowGroups, MessageTypeConverter.toParquetSchema(this.messageType));
         outputData.add(createDataOutput(footer));
 
         Slice footerSize = Slices.allocate(SIZE_OF_INT);
