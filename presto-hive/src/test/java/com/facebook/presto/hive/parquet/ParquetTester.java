@@ -173,6 +173,7 @@ public class ParquetTester
 
             RowPagesBuilder rowPagesBuilder = rowPagesBuilder(columnTypes);
             List<List<Object>> data = ImmutableList.of(ImmutableList.of("abc"), ImmutableList.of("aed"));
+            List<List<Object>> dxata = ImmutableList.of(ImmutableList.of("a"), ImmutableList.of("e"));
             for (int i = 0; i < 2; ++i) {
                 rowPagesBuilder.row(data.get(i));
                 rowPagesBuilder.pageBreak();
