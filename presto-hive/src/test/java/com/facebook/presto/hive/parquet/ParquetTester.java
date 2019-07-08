@@ -167,9 +167,9 @@ public class ParquetTester
                     columnNames,
                     columnTypes);
 
-            List<Object> values = Arrays.asList(42L, 43L);
-            List<Object> another = Arrays.asList(2, 3);
-            List<Object> varchars = Arrays.asList("hello", "world");
+            List<Object> values = Arrays.asList(42L, null);
+            List<Object> another = Arrays.asList(null, 3);
+            List<Object> varchars = Arrays.asList("hello", null);
             RowPagesBuilder rowPagesBuilder = rowPagesBuilder(columnTypes);
             for (int i = 0; i < 2; ++i) {
                 rowPagesBuilder.row(values.get(i), another.get(i), varchars.get(i));

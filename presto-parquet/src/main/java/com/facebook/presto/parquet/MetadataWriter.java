@@ -66,7 +66,7 @@ public class MetadataWriter
             SchemaElement child = new SchemaElement();
             child.setName(names.get(i));
             child.setType(ParquetWriterUtils.getParquetType(types.get(i)));
-            child.setRepetition_type(FieldRepetitionType.REQUIRED);
+            child.setRepetition_type(FieldRepetitionType.OPTIONAL);
             list.add(child);
         }
 
