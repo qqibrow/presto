@@ -35,15 +35,14 @@ import com.facebook.presto.spi.block.Block;
 import com.facebook.presto.spi.type.ArrayType;
 import com.facebook.presto.spi.type.DateType;
 import com.facebook.presto.spi.type.DecimalType;
-import com.facebook.presto.spi.type.IntegerType;
 import com.facebook.presto.spi.type.MapType;
+import com.facebook.presto.spi.type.RowType;
 import com.facebook.presto.spi.type.SqlDate;
 import com.facebook.presto.spi.type.SqlDecimal;
 import com.facebook.presto.spi.type.SqlTimestamp;
 import com.facebook.presto.spi.type.SqlVarbinary;
 import com.facebook.presto.spi.type.TimestampType;
 import com.facebook.presto.spi.type.Type;
-import com.facebook.presto.spi.type.VarcharType;
 import com.facebook.presto.testing.TestingConnectorSession;
 import com.google.common.base.Function;
 import com.google.common.base.Joiner;
@@ -77,7 +76,6 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.math.BigInteger;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -95,12 +93,15 @@ import static com.facebook.presto.hive.HiveUtil.isMapType;
 import static com.facebook.presto.hive.HiveUtil.isRowType;
 import static com.facebook.presto.hive.HiveUtil.isStructuralType;
 import static com.facebook.presto.spi.type.BigintType.BIGINT;
+import static com.facebook.presto.spi.type.RowType.field;
 import static com.facebook.presto.spi.type.TimeZoneKey.UTC_KEY;
 import static com.facebook.presto.spi.type.VarbinaryType.VARBINARY;
+import static com.facebook.presto.spi.type.VarcharType.VARCHAR;
 import static com.facebook.presto.spi.type.Varchars.isVarcharType;
 import static com.google.common.base.Functions.constant;
 import static com.google.common.collect.Iterables.transform;
 import static io.airlift.units.DataSize.succinctBytes;
+import static java.util.Arrays.asList;
 import static java.util.Arrays.stream;
 import static java.util.Collections.singletonList;
 import static org.apache.hadoop.hive.serde2.objectinspector.ObjectInspectorFactory.getStandardStructObjectInspector;
@@ -160,28 +161,30 @@ public class ParquetTester
             jobConf.setBoolean(ENABLE_DICTIONARY, false);
             // TODO not sure it's 2.0
             jobConf.setEnum(WRITER_VERSION, PARQUET_2_0);
-            ImmutableList<String> columnNames = ImmutableList.of("test_column_name1", "test_column2", "name");
-            ImmutableList<Type> columnTypes = ImmutableList.of(BIGINT, IntegerType.INTEGER, VarcharType.VARCHAR);
+
+            Type structType = RowType.from(asList(field("stringField", VARCHAR), field("longField", BIGINT)));
+
+            ImmutableList<String> columnNames = ImmutableList.of("name");
+            ImmutableList<Type> columnTypes = ImmutableList.of(structType);
+
             ParquetWriter parquetWriter = new ParquetWriter(
                     new FileOutputStream(tempFile.getFile()),
                     columnNames,
                     columnTypes);
 
-            List<Object> values = Arrays.asList(42L, null);
-            List<Object> another = Arrays.asList(null, 3);
-            List<Object> varchars = Arrays.asList("hello", null);
             RowPagesBuilder rowPagesBuilder = rowPagesBuilder(columnTypes);
+            List<List<Object>> data = ImmutableList.of(ImmutableList.of("abc", 2L), ImmutableList.of("aed", 3L));
             for (int i = 0; i < 2; ++i) {
-                rowPagesBuilder.row(values.get(i), another.get(i), varchars.get(i));
-                rowPagesBuilder.pageBreak();
+                rowPagesBuilder.row(data.get(i));
             }
+            rowPagesBuilder.pageBreak();
             List<Page> pages = rowPagesBuilder.build();
             for (Page page : pages) {
                 parquetWriter.write(page);
             }
             parquetWriter.close();
 
-            assertFileContents(SESSION, tempFile.getFile(), getIterators(new Iterable[] {values, another, varchars}), columnNames, columnTypes);
+            assertFileContents(SESSION, tempFile.getFile(), getIterators(new Iterable[] {data}), columnNames, columnTypes);
         }
     }
 
