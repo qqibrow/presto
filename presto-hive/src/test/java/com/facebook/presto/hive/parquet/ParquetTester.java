@@ -164,7 +164,7 @@ public class ParquetTester
 
             Type structType = RowType.from(asList(field("stringField", VARCHAR), field("longField", BIGINT)));
 
-            ImmutableList<String> columnNames = ImmutableList.of("name");
+            ImmutableList<String> columnNames = ImmutableList.of("testStruct");
             ImmutableList<Type> columnTypes = ImmutableList.of(structType);
 
             ParquetWriter parquetWriter = new ParquetWriter(
@@ -176,8 +176,8 @@ public class ParquetTester
             List<List<Object>> data = ImmutableList.of(ImmutableList.of("abc", 2L), ImmutableList.of("aed", 3L));
             for (int i = 0; i < 2; ++i) {
                 rowPagesBuilder.row(data.get(i));
+                rowPagesBuilder.pageBreak();
             }
-            rowPagesBuilder.pageBreak();
             List<Page> pages = rowPagesBuilder.build();
             for (Page page : pages) {
                 parquetWriter.write(page);
