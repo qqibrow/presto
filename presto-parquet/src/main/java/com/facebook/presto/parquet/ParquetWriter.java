@@ -89,8 +89,9 @@ public class ParquetWriter
         @Override
         public ColumnWriter struct(GroupType struct, List<ColumnWriter> fields)
         {
-            int fieldDefinitionLevel = type.getMaxDefinitionLevel(path(struct.getName()));
-            int fieldRepetitionLevel = type.getMaxRepetitionLevel(path(struct.getName()));
+            String[] path = currentPath();
+            int fieldDefinitionLevel = type.getMaxDefinitionLevel(path);
+            int fieldRepetitionLevel = type.getMaxRepetitionLevel(path);
             return new StructColumnWriter(ImmutableList.copyOf(fields), fieldDefinitionLevel, fieldRepetitionLevel);
         }
 
