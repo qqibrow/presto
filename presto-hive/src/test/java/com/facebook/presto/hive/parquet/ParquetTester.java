@@ -92,6 +92,7 @@ import static com.facebook.presto.hive.HiveUtil.isArrayType;
 import static com.facebook.presto.hive.HiveUtil.isMapType;
 import static com.facebook.presto.hive.HiveUtil.isRowType;
 import static com.facebook.presto.hive.HiveUtil.isStructuralType;
+import static com.facebook.presto.spi.type.BigintType.BIGINT;
 import static com.facebook.presto.spi.type.RowType.field;
 import static com.facebook.presto.spi.type.TimeZoneKey.UTC_KEY;
 import static com.facebook.presto.spi.type.VarbinaryType.VARBINARY;
@@ -161,7 +162,7 @@ public class ParquetTester
             // TODO not sure it's 2.0
             jobConf.setEnum(WRITER_VERSION, PARQUET_2_0);
 
-            Type structType = RowType.from(asList(field("stringField", VARCHAR)));
+            Type structType = RowType.from(asList(field("stringField", VARCHAR), field("longField", BIGINT)));
 
             ImmutableList<String> columnNames = ImmutableList.of("testStruct");
             ImmutableList<Type> columnTypes = ImmutableList.of(structType);
@@ -172,12 +173,11 @@ public class ParquetTester
                     columnTypes);
 
             RowPagesBuilder rowPagesBuilder = rowPagesBuilder(columnTypes);
-            List<List<Object>> data = ImmutableList.of(ImmutableList.of("abc"), ImmutableList.of("aed"));
-            List<List<Object>> dxata = ImmutableList.of(ImmutableList.of("a"), ImmutableList.of("e"));
-            for (int i = 0; i < 2; ++i) {
+            List<List<Object>> data = asList(null, asList("abc", null), ImmutableList.of("ad", 3L), null);
+            for (int i = 0; i < data.size(); ++i) {
                 rowPagesBuilder.row(data.get(i));
-                rowPagesBuilder.pageBreak();
             }
+            rowPagesBuilder.pageBreak();
             List<Page> pages = rowPagesBuilder.build();
             for (Page page : pages) {
                 parquetWriter.write(page);
