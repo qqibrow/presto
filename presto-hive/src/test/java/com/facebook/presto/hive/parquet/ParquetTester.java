@@ -29,9 +29,11 @@ import com.facebook.presto.parquet.ParquetWriter;
 import com.facebook.presto.spi.ConnectorPageSource;
 import com.facebook.presto.spi.ConnectorSession;
 import com.facebook.presto.spi.Page;
+import com.facebook.presto.spi.PageBuilder;
 import com.facebook.presto.spi.RecordCursor;
 import com.facebook.presto.spi.RecordPageSource;
 import com.facebook.presto.spi.block.Block;
+import com.facebook.presto.spi.block.BlockBuilder;
 import com.facebook.presto.spi.type.ArrayType;
 import com.facebook.presto.spi.type.DateType;
 import com.facebook.presto.spi.type.DecimalType;
@@ -46,11 +48,13 @@ import com.facebook.presto.spi.type.Type;
 import com.facebook.presto.testing.TestingConnectorSession;
 import com.google.common.base.Function;
 import com.google.common.base.Joiner;
+import com.google.common.base.Preconditions;
 import com.google.common.collect.AbstractIterator;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
 import io.airlift.slice.Slice;
+import io.airlift.slice.Slices;
 import io.airlift.units.DataSize;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.ql.exec.FileSinkOperator.RecordWriter;
@@ -83,6 +87,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.Random;
 import java.util.Set;
 
 import static com.facebook.presto.RowPagesBuilder.rowPagesBuilder;
@@ -97,6 +102,7 @@ import static com.facebook.presto.spi.type.RowType.field;
 import static com.facebook.presto.spi.type.TimeZoneKey.UTC_KEY;
 import static com.facebook.presto.spi.type.VarbinaryType.VARBINARY;
 import static com.facebook.presto.spi.type.VarcharType.VARCHAR;
+import static com.facebook.presto.spi.type.VarcharType.createUnboundedVarcharType;
 import static com.facebook.presto.spi.type.Varchars.isVarcharType;
 import static com.google.common.base.Functions.constant;
 import static com.google.common.collect.Iterables.transform;
@@ -152,7 +158,7 @@ public class ParquetTester
         return parquetTester;
     }
 
-    void testWriteParquetFile()
+    void testWriteStruct()
             throws IOException
     {
         try (TempFile tempFile = new TempFile("test", "parquet")) {
@@ -186,6 +192,68 @@ public class ParquetTester
 
             assertFileContents(SESSION, tempFile.getFile(), getIterators(new Iterable[] {data}), columnNames, columnTypes);
         }
+    }
+
+    void testWriteArray()
+            throws IOException
+    {
+        try (TempFile tempFile = new TempFile("test", "parquet")) {
+            JobConf jobConf = new JobConf();
+            jobConf.setEnum(COMPRESSION, UNCOMPRESSED);
+            jobConf.setBoolean(ENABLE_DICTIONARY, false);
+            // TODO not sure it's 2.0
+            jobConf.setEnum(WRITER_VERSION, PARQUET_2_0);
+
+            Type type = new ArrayType(createUnboundedVarcharType());
+            ImmutableList<String> columnNames = ImmutableList.of("array");
+            ImmutableList<Type> columnTypes = ImmutableList.of(type);
+
+            PageBuilder pageBuilder = new PageBuilder(ImmutableList.of(type));
+            ImmutableList.Builder<Page> pages = ImmutableList.builder();
+
+            ImmutableList.Builder<List<Object>> listBuilder = ImmutableList.builder();
+
+            Random random = new Random(1234);
+            for (int count = 0; count < 10; count++) {
+                pageBuilder.declarePosition();
+
+                BlockBuilder builder = pageBuilder.getBlockBuilder(0);
+                BlockBuilder mapBuilder = builder.beginBlockEntry();
+                ImmutableList.Builder<Object> expectValueBuilder = ImmutableList.builder();
+                int entries = nextRandomBetween(random, MIN_ENTRIES, MAX_ENTRIES);
+                for (int entryId = 0; entryId < entries; entryId++) {
+                    String value = "key" + random.nextInt(10_000_000);
+                    createUnboundedVarcharType().writeSlice(mapBuilder, Slices.utf8Slice(value));
+                    expectValueBuilder.add(value);
+                }
+                builder.closeEntry();
+                listBuilder.add(expectValueBuilder.build());
+                Preconditions.checkArgument(!pageBuilder.isFull());
+            }
+
+            pages.add(pageBuilder.build());
+            pageBuilder.reset();
+
+            ParquetWriter parquetWriter = new ParquetWriter(
+                    new FileOutputStream(tempFile.getFile()),
+                    columnNames,
+                    columnTypes);
+
+            for (Page page : pages.build()) {
+                parquetWriter.write(page);
+            }
+            parquetWriter.close();
+
+            assertFileContents(SESSION, tempFile.getFile(), getIterators(new Iterable[] {listBuilder.build()}), columnNames, columnTypes);
+        }
+    }
+
+    private static final int MIN_ENTRIES = 1;
+    private static final int MAX_ENTRIES = 5;
+
+    private static int nextRandomBetween(Random random, int min, int max)
+    {
+        return min + random.nextInt(max - min);
     }
 
     public void testRoundTrip(PrimitiveObjectInspector columnObjectInspector, Iterable<?> writeValues, Type parameterType)

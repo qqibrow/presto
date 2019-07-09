@@ -98,7 +98,10 @@ public class ParquetWriter
         @Override
         public ColumnWriter list(GroupType array, ColumnWriter element)
         {
-            throw new UnsupportedOperationException("not supported");
+            String[] path = currentPath();
+            int fieldDefinitionLevel = type.getMaxDefinitionLevel(path);
+            int fieldRepetitionLevel = type.getMaxRepetitionLevel(path);
+            return new ArrayColumnWriter(element, fieldDefinitionLevel, fieldRepetitionLevel);
         }
 
         @Override
@@ -110,9 +113,10 @@ public class ParquetWriter
         @Override
         public ColumnWriter primitive(PrimitiveType primitive)
         {
-            String[] repeatedPath = currentPath();
-            int repeatedD = type.getMaxDefinitionLevel(repeatedPath);
-            return new LongColumnWriter(getType(primitive), ImmutableList.copyOf(repeatedPath), repeatedD);
+            String[] path = currentPath();
+            int fieldDefinitionLevel = type.getMaxDefinitionLevel(path);
+            int fieldRepetitionLevel = type.getMaxRepetitionLevel(path);
+            return new LongColumnWriter(getType(primitive), ImmutableList.copyOf(path), fieldDefinitionLevel, fieldRepetitionLevel);
         }
 
         Type getType(PrimitiveType primitive)

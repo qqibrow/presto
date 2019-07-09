@@ -59,14 +59,13 @@ public class LongColumnWriter
 
     private final int maxDefinitionLevel;
 
-    public LongColumnWriter(Type type, List<String> name, int maxDefinitionLevel)
+    public LongColumnWriter(Type type, List<String> name, int maxDefinitionLevel, int maxRepetitionLevel)
     {
         this.type = requireNonNull(type, "type is null");
         HeapByteBufferAllocator allocator = HeapByteBufferAllocator.getInstance();
         this.valuesWriter = new PlainValuesWriter(INITIAL_SLAB_SIZE, DEFAULT_PAGE_SIZE, allocator);
-        int widthFromMaxInt = BytesUtils.getWidthFromMaxInt(maxDefinitionLevel);
-        this.definitionLevel = new RunLengthBitPackingHybridEncoder(widthFromMaxInt, INITIAL_SLAB_SIZE, DEFAULT_PAGE_SIZE, allocator);
-        this.replicationLevel = new RunLengthBitPackingHybridEncoder(widthFromMaxInt, INITIAL_SLAB_SIZE, DEFAULT_PAGE_SIZE, allocator);
+        this.definitionLevel = new RunLengthBitPackingHybridEncoder(BytesUtils.getWidthFromMaxInt(maxDefinitionLevel), INITIAL_SLAB_SIZE, DEFAULT_PAGE_SIZE, allocator);
+        this.replicationLevel = new RunLengthBitPackingHybridEncoder(BytesUtils.getWidthFromMaxInt(maxRepetitionLevel), INITIAL_SLAB_SIZE, DEFAULT_PAGE_SIZE, allocator);
         this.writer = ParquetWriterUtils.getWriter(this.type, valuesWriter);
 
         this.path = ImmutableList.copyOf(name);

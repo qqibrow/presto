@@ -127,7 +127,8 @@ public abstract class AbstractTestParquetReader
     public void testSimpleWriter()
             throws Exception
     {
-        tester.testWriteParquetFile();
+        tester.testWriteStruct();
+        tester.testWriteArray();
     }
 
     @Test
