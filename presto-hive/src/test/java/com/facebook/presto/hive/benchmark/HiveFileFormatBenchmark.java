@@ -116,20 +116,18 @@ public class HiveFileFormatBenchmark
     private DataSet dataSet;
 
     @Param({
-            "NONE",
-            "SNAPPY",
-            "GZIP"})
+            "NONE"})
     private HiveCompressionCodec compression;
 
     @Param({
 //            "PRESTO_RCBINARY",
 //            "PRESTO_RCTEXT",
-            "PRESTO_ORC",
+            "PRESTO_PARQUET",
 //            "PRESTO_DWRF",
             //"PRESTO_PARQUET",
 //            "HIVE_RCBINARY",
 //            "HIVE_RCTEXT",
-            "HIVE_ORC"
+            "HIVE_PARQUET"
 //            "HIVE_DWRF",
             //"HIVE_PARQUET"
             })
