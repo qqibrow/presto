@@ -30,6 +30,4 @@ public interface ColumnWriter
     long getBufferedBytes();
 
     void reset();
-
-
 }

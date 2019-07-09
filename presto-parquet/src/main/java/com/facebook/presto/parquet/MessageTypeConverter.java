@@ -1,3 +1,16 @@
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.facebook.presto.parquet;
 
 import org.apache.parquet.format.ConvertedType;
@@ -15,16 +28,23 @@ import java.util.List;
 
 public class MessageTypeConverter
 {
-    public static List<SchemaElement> toParquetSchema(MessageType schema) {
+    private MessageTypeConverter()
+    {}
+
+    public static List<SchemaElement> toParquetSchema(MessageType schema)
+    {
         List<SchemaElement> result = new ArrayList<SchemaElement>();
         addToList(result, schema);
         return result;
     }
 
-    private static void addToList(final List<SchemaElement> result, org.apache.parquet.schema.Type field) {
-        field.accept(new TypeVisitor() {
+    private static void addToList(final List<SchemaElement> result, org.apache.parquet.schema.Type field)
+    {
+        field.accept(new TypeVisitor()
+        {
             @Override
-            public void visit(PrimitiveType primitiveType) {
+            public void visit(PrimitiveType primitiveType)
+            {
                 SchemaElement element = new SchemaElement(primitiveType.getName());
                 element.setRepetition_type(toParquetRepetition(primitiveType.getRepetition()));
                 element.setType(getType(primitiveType.getPrimitiveTypeName()));
@@ -45,7 +65,8 @@ public class MessageTypeConverter
             }
 
             @Override
-            public void visit(MessageType messageType) {
+            public void visit(MessageType messageType)
+            {
                 SchemaElement element = new SchemaElement(messageType.getName());
                 if (messageType.getId() != null) {
                     element.setField_id(messageType.getId().intValue());
@@ -54,7 +75,8 @@ public class MessageTypeConverter
             }
 
             @Override
-            public void visit(GroupType groupType) {
+            public void visit(GroupType groupType)
+            {
                 SchemaElement element = new SchemaElement(groupType.getName());
                 element.setRepetition_type(toParquetRepetition(groupType.getRepetition()));
                 if (groupType.getOriginalType() != null) {
@@ -67,7 +89,8 @@ public class MessageTypeConverter
             }
 
             private void visitChildren(final List<SchemaElement> result,
-                    GroupType groupType, SchemaElement element) {
+                    GroupType groupType, SchemaElement element)
+            {
                 element.setNum_children(groupType.getFieldCount());
                 result.add(element);
                 for (org.apache.parquet.schema.Type field : groupType.getFields()) {
@@ -76,13 +99,16 @@ public class MessageTypeConverter
             }
         });
     }
+
     // Visible for testing
-    static FieldRepetitionType toParquetRepetition(org.apache.parquet.schema.Type.Repetition repetition) {
+    static FieldRepetitionType toParquetRepetition(org.apache.parquet.schema.Type.Repetition repetition)
+    {
         return FieldRepetitionType.valueOf(repetition.name());
     }
 
     // Visible for testing
-    static org.apache.parquet.format.Type getType(PrimitiveType.PrimitiveTypeName type) {
+    static org.apache.parquet.format.Type getType(PrimitiveType.PrimitiveTypeName type)
+    {
         switch (type) {
             case INT64:
                 return Type.INT64;
@@ -105,7 +131,8 @@ public class MessageTypeConverter
         }
     }
 
-    static ConvertedType getConvertedType(OriginalType type) {
+    static ConvertedType getConvertedType(OriginalType type)
+    {
         switch (type) {
             case UTF8:
                 return ConvertedType.UTF8;

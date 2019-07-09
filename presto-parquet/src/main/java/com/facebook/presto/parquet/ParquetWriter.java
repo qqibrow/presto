@@ -282,7 +282,6 @@ public class ParquetWriter
 
     private List<ParquetDataOutput> getFooter()
     {
-
         List<ParquetDataOutput> outputData = new ArrayList<>();
         Slice footer = metadataWriter.getFooter(rowGroups, MessageTypeConverter.toParquetSchema(this.messageType));
         outputData.add(createDataOutput(footer));
