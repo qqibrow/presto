@@ -17,7 +17,6 @@ import com.facebook.presto.spi.block.Block;
 import com.facebook.presto.spi.type.Type;
 import com.google.common.collect.ImmutableList;
 import io.airlift.slice.Slices;
-import org.apache.parquet.bytes.BytesInput;
 import org.apache.parquet.bytes.BytesUtils;
 import org.apache.parquet.bytes.HeapByteBufferAllocator;
 import org.apache.parquet.column.values.ValuesWriter;
@@ -35,6 +34,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.function.BiConsumer;
 
+import static com.facebook.presto.parquet.ParquetDataOutput.createDataOutput;
 import static com.facebook.presto.parquet.ParquetWriterUtils.getParquetType;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkState;
@@ -64,11 +64,9 @@ public class LongColumnWriter
     private boolean getDataStreamsCalled;
     private int rows;
     private int nullCounts;
+    private long totalBytes;
 
     private byte[] pageheader;
-    private byte[] data;
-    private byte[] replicationLevelBytes;
-    private byte[] definitionLevelBytes;
 
     private final int maxDefinitionLevel;
 
@@ -157,7 +155,6 @@ public class LongColumnWriter
         checkState(closed);
         checkState(getDataStreamsCalled);
 
-        long totalBytes = pageheader.length + data.length + replicationLevelBytes.length + definitionLevelBytes.length;
         return ImmutableList.of(new ColumnMetaData(
                 parquetType,
                 encodings,
@@ -179,30 +176,30 @@ public class LongColumnWriter
         checkState(closed);
 
         ImmutableList.Builder<ParquetDataOutput> outputDataStreams = ImmutableList.builder();
-        BytesInput bytes = valuesWriter.getBytes();
         try {
-            data = bytes.toByteArray();
-            replicationLevelBytes = replicationLevel.toBytes().toByteArray();
-            definitionLevelBytes = definitionLevel.toBytes().toByteArray();
-
-            long uncompressedSize = data.length + replicationLevelBytes.length + definitionLevelBytes.length;
+            ParquetDataOutput data = createDataOutput(valuesWriter.getBytes());
+            ParquetDataOutput replicationLevelOutput = createDataOutput(replicationLevel.toBytes());
+            ParquetDataOutput definitionLevelOutput = createDataOutput(definitionLevel.toBytes());
+            long uncompressedSize = data.size() + replicationLevelOutput.size() + definitionLevelOutput.size();
             long compressedSize = uncompressedSize;
 
             ByteArrayOutputStream pageHeaderOutputStream = new ByteArrayOutputStream();
-            parquetMetadataConverter.writeDataPageV2Header((int) uncompressedSize, (int) compressedSize, rows, nullCounts, rows, org.apache.parquet.column.Encoding.PLAIN, replicationLevelBytes.length, definitionLevelBytes.length, pageHeaderOutputStream);
+            parquetMetadataConverter.writeDataPageV2Header((int) uncompressedSize, (int) compressedSize, rows, nullCounts, rows, org.apache.parquet.column.Encoding.PLAIN, (int) replicationLevelOutput.size(), (int) definitionLevelOutput.size(), pageHeaderOutputStream);
             pageheader = pageHeaderOutputStream.toByteArray();
+
+            outputDataStreams.add(createDataOutput(Slices.wrappedBuffer(pageheader)));
+            outputDataStreams.add(replicationLevelOutput);
+            outputDataStreams.add(definitionLevelOutput);
+            outputDataStreams.add(data);
         }
         catch (IOException e) {
             throw new RuntimeException("Unable to write bytes", e);
         }
 
-        outputDataStreams.add(ParquetDataOutput.createDataOutput(Slices.wrappedBuffer(pageheader)));
-        outputDataStreams.add(ParquetDataOutput.createDataOutput(Slices.wrappedBuffer(replicationLevelBytes)));
-        outputDataStreams.add(ParquetDataOutput.createDataOutput(Slices.wrappedBuffer(definitionLevelBytes)));
-        outputDataStreams.add(ParquetDataOutput.createDataOutput(Slices.wrappedBuffer(data)));
-
         getDataStreamsCalled = true;
-        return outputDataStreams.build();
+        List<ParquetDataOutput> dataOutputs = outputDataStreams.build();
+        totalBytes = dataOutputs.stream().mapToLong(ParquetDataOutput::size).sum();
+        return dataOutputs;
     }
 
     @Override
@@ -222,14 +219,13 @@ public class LongColumnWriter
         closed = false;
         rows = 0;
         nullCounts = 0;
+        totalBytes = 0;
+
         valuesWriter.reset();
         definitionLevel.reset();
         replicationLevel.reset();
 
         getDataStreamsCalled = false;
         pageheader = null;
-        data = null;
-        replicationLevelBytes = null;
-        definitionLevelBytes = null;
     }
 }

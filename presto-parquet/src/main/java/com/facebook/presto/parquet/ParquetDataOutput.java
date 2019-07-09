@@ -15,6 +15,9 @@ package com.facebook.presto.parquet;
 
 import io.airlift.slice.Slice;
 import io.airlift.slice.SliceOutput;
+import org.apache.parquet.bytes.BytesInput;
+
+import java.io.IOException;
 
 import static java.util.Objects.requireNonNull;
 
@@ -35,6 +38,30 @@ public interface ParquetDataOutput
             public void writeData(SliceOutput sliceOutput)
             {
                 sliceOutput.writeBytes(slice);
+            }
+        };
+    }
+
+    static ParquetDataOutput createDataOutput(BytesInput bytesInput)
+    {
+        requireNonNull(bytesInput, "slice is null");
+        return new ParquetDataOutput()
+        {
+            @Override
+            public long size()
+            {
+                return bytesInput.size();
+            }
+
+            @Override
+            public void writeData(SliceOutput sliceOutput)
+            {
+                try {
+                    bytesInput.writeAllTo(sliceOutput);
+                }
+                catch (IOException e) {
+                    e.printStackTrace();
+                }
             }
         };
     }
