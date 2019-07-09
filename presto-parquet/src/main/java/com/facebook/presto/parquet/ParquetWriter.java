@@ -54,6 +54,7 @@ public class ParquetWriter
     private final List<Type> types;
     private final List<String> names;
     private final MessageType messageType;
+    public static final int DEFAULT_BLOCK_SIZE = 128 * 1024 * 1024;
 
     private List<RowGroup> rowGroups = new ArrayList<>();
 
@@ -193,11 +194,14 @@ public class ParquetWriter
             writer.writeBlock(new ColumnTrunk(page.getBlock(channel)));
             bufferedBytes += writer.getBufferedBytes();
         }
-
         rows += page.getPositionCount();
 
-        columnWriters.forEach(ColumnWriter::close);
-        flush();
+        if (bufferedBytes >= DEFAULT_BLOCK_SIZE) {
+            columnWriters.forEach(ColumnWriter::close);
+            flush();
+            columnWriters.forEach(ColumnWriter::reset);
+            rows = 0;
+        }
     }
 
     @Override
@@ -247,14 +251,6 @@ public class ParquetWriter
         // update stats
         updateRowGroups(getOffsetColumnMetadata(columnMetaDatas, stripeStartOffset));
         outputData.forEach(data -> data.writeData(outputStream));
-
-        finishRowGroup();
-    }
-
-    private void finishRowGroup()
-    {
-        rows = 0;
-        columnWriters.forEach(ColumnWriter::reset);
     }
 
     private void flushFooter()
