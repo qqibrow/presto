@@ -22,6 +22,14 @@ import java.io.IOException;
 
 public class TestHiveFileFormatBenchmark
 {
+
+    @Test
+    public void testParquetWriterFormat()
+            throws Exception
+    {
+        executeBenchmark(DataSet.LARGE_ARRAY_VARCHAR, HiveCompressionCodec.NONE, FileFormat.PRESTO_PARQUET);
+    }
+
     @Test
     public void testSomeFormats()
             throws Exception

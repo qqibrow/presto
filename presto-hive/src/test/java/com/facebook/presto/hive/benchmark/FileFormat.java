@@ -203,8 +203,9 @@ public enum FileFormat
                 List<String> columnNames,
                 List<Type> columnTypes,
                 HiveCompressionCodec compressionCodec)
+                throws IOException
         {
-            return new RecordFormatWriter(targetFile, columnNames, columnTypes, compressionCodec, HiveStorageFormat.PARQUET, session);
+            return new PrestoParquetFormatWriter(targetFile, columnNames, columnTypes);
         }
     },
 
