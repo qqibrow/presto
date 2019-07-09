@@ -22,7 +22,6 @@ import java.io.IOException;
 
 public class TestHiveFileFormatBenchmark
 {
-
     @Test
     public void testParquetWriterFormat()
             throws Exception
