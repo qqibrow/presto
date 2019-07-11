@@ -85,8 +85,11 @@ public abstract class RepValueV2
                     return nullValue(getValue());
                 }
                 else {
-                    iterator = new FixedValueIterator(columnarArray.getLength(position), getValue(), maxRepetionValue);
-                    Preconditions.checkArgument(iterator.hasNext(), "Not support empty array yet");
+                    int arrayLength = columnarArray.getLength(position);
+                    if (arrayLength == 0) {
+                        return nullValue(getValue());
+                    }
+                    iterator = new FixedValueIterator(arrayLength, getValue(), maxRepetionValue);
                     return iterator.next();
                 }
             }

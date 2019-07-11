@@ -127,10 +127,14 @@ public abstract class DefValueV2
                     return endOfData();
                 }
                 if (block.isNull(position)) {
-                    return Optional.of(maxDefinitionLevel - 1);
+                    return Optional.of(maxDefinitionLevel - 2);
                 }
                 else {
-                    iterator = new FixedValueIterator(block.getLength(position));
+                    int arrayLength = block.getLength(position);
+                    if (arrayLength == 0) {
+                        return Optional.of(maxDefinitionLevel - 1);
+                    }
+                    iterator = new FixedValueIterator(arrayLength);
                     Preconditions.checkArgument(iterator.hasNext(), "Not support empty array yet");
                     return iterator.next();
                 }

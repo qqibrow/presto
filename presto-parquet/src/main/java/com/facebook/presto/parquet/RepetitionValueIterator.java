@@ -71,7 +71,7 @@ public interface RepetitionValueIterator
                     builder.add(nullValue(0));
                 }
                 else {
-                    Preconditions.checkArgument(columnarArray.getLength(i) > 0);
+                    //Preconditions.checkArgument(columnarArray.getLength(i) > 0);
                     for (int j = 0; j < columnarArray.getLength(i); ++j) {
                         if (j == 0) {
                             builder.add(nonNullValue(0));

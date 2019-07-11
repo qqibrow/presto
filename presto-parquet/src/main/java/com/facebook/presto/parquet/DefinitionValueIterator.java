@@ -134,7 +134,7 @@ public interface DefinitionValueIterator
                     builder.add(Optional.of(maxDefinitionLevel - 1));
                 }
                 else {
-                    Preconditions.checkArgument(columnarArray.getLength(i) > 0);
+                    //Preconditions.checkArgument(columnarArray.getLength(i) > 0);
                     for (int j = 0; j < columnarArray.getLength(i); ++j) {
                         builder.add(Optional.empty());
                     }
