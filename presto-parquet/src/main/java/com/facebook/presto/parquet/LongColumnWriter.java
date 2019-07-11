@@ -30,6 +30,7 @@ import org.apache.parquet.format.converter.ParquetMetadataConverter;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.function.BiConsumer;
@@ -97,13 +98,15 @@ public class LongColumnWriter
             current = new ColumnTrunk(columnTrunk.getBlock(),
                     new DefinitionValueIterator.PrimitiveIterator(columnTrunk.getBlock(), maxDefinitionLevel),
                     new RepetitionValueIterator.BlockIterator(columnTrunk.getBlock()),
-                    ImmutableList.of(DefValueV2.getIterator(columnTrunk.getBlock(), maxDefinitionLevel)));
+                    ImmutableList.of(DefValueV2.getIterator(columnTrunk.getBlock(), maxDefinitionLevel)),
+                    ImmutableList.of(RepValueV2.getIterator(columnTrunk.getBlock())));
         }
         else {
             current = new ColumnTrunk(columnTrunk.getBlock(),
                     new DefinitionValueIterator.PrimitiveIterator(columnTrunk.getDefIterator(), columnTrunk.getBlock(), maxDefinitionLevel),
                     new RepetitionValueIterator.BlockIterator(columnTrunk.getRepIterator(), columnTrunk.getBlock()),
-                    ImmutableList.<DefValueV2>builder().addAll(columnTrunk.getList()).add(DefValueV2.getIterator(columnTrunk.getBlock(), maxDefinitionLevel)).build());
+                    ImmutableList.<DefValueV2>builder().addAll(columnTrunk.getDefList()).add(DefValueV2.getIterator(columnTrunk.getBlock(), maxDefinitionLevel)).build(),
+                    ImmutableList.<RepValueV2>builder().addAll(columnTrunk.getRepValueV2List()).add(RepValueV2.getIterator(columnTrunk.getBlock())).build());
         }
 
         // record values
@@ -115,11 +118,13 @@ public class LongColumnWriter
         }
 
         // write definitionLevels
-        Iterator<Integer> defIterator = new DefDefIterator(current.getList());
+        List<Integer> defs = new ArrayList<>();
+        Iterator<Integer> defIterator = new DefDefIterator(current.getDefList());
         while (defIterator.hasNext()) {
             int next = defIterator.next();
             try {
                 definitionLevel.writeInt(next);
+                defs.add(next);
                 if (next != maxDefinitionLevel) {
                     nullCounts++;
                 }
@@ -129,18 +134,22 @@ public class LongColumnWriter
                 e.printStackTrace();
             }
         }
+        System.out.println("defs: " + defs);
 
         // write reptitionLevel
-        Iterator<RepetitionValueIterator.RepetitionValue> repIterator = current.getRepIterator();
+        List<Integer> reps = new ArrayList<>();
+        Iterator<Integer> repIterator = new RepValueV2.RepRepIterator(current.getRepValueV2List());
         while (repIterator.hasNext()) {
-            RepetitionValueIterator.RepetitionValue next = repIterator.next();
+            int next = repIterator.next();
             try {
-                replicationLevel.writeInt(next.getValue());
+                replicationLevel.writeInt(next);
+                reps.add(next);
             }
             catch (IOException e) {
                 e.printStackTrace();
             }
         }
+        System.out.println("reptitions: " + reps);
     }
 
     @Override

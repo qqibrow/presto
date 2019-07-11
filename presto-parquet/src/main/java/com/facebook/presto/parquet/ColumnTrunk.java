@@ -26,6 +26,7 @@ public class ColumnTrunk
     private final DefinitionValueIterator defIterator;
     private final RepetitionValueIterator repIterator;
     private final List<DefValueV2> list;
+    private final List<RepValueV2> repValueV2List;
 
     ColumnTrunk(Block block)
     {
@@ -33,19 +34,26 @@ public class ColumnTrunk
         this.defIterator = null;
         this.repIterator = null;
         this.list = null;
+        this.repValueV2List = null;
     }
 
-    List<DefValueV2> getList()
+    List<DefValueV2> getDefList()
     {
         return list;
     }
 
-    ColumnTrunk(Block block, DefinitionValueIterator defIterator, RepetitionValueIterator repIterator, List<DefValueV2> defValueV2List)
+    List<RepValueV2> getRepValueV2List()
+    {
+        return repValueV2List;
+    }
+
+    ColumnTrunk(Block block, DefinitionValueIterator defIterator, RepetitionValueIterator repIterator, List<DefValueV2> defValueV2List, List<RepValueV2> repValueV2List)
     {
         this.block = block;
         this.defIterator = defIterator;
         this.repIterator = repIterator;
         this.list = defValueV2List;
+        this.repValueV2List = repValueV2List;
     }
 
     public Block getBlock()
