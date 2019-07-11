@@ -35,16 +35,18 @@ import com.facebook.presto.spi.RecordPageSource;
 import com.facebook.presto.spi.block.Block;
 import com.facebook.presto.spi.block.BlockBuilder;
 import com.facebook.presto.spi.type.ArrayType;
-import com.facebook.presto.spi.type.DateType;
+import com.facebook.presto.spi.type.CharType;
 import com.facebook.presto.spi.type.DecimalType;
+import com.facebook.presto.spi.type.Decimals;
 import com.facebook.presto.spi.type.MapType;
 import com.facebook.presto.spi.type.RowType;
 import com.facebook.presto.spi.type.SqlDate;
 import com.facebook.presto.spi.type.SqlDecimal;
 import com.facebook.presto.spi.type.SqlTimestamp;
 import com.facebook.presto.spi.type.SqlVarbinary;
-import com.facebook.presto.spi.type.TimestampType;
+import com.facebook.presto.spi.type.StandardTypes;
 import com.facebook.presto.spi.type.Type;
+import com.facebook.presto.spi.type.VarcharType;
 import com.facebook.presto.testing.TestingConnectorSession;
 import com.google.common.base.Function;
 import com.google.common.base.Joiner;
@@ -98,19 +100,29 @@ import static com.facebook.presto.hive.HiveUtil.isMapType;
 import static com.facebook.presto.hive.HiveUtil.isRowType;
 import static com.facebook.presto.hive.HiveUtil.isStructuralType;
 import static com.facebook.presto.spi.type.BigintType.BIGINT;
+import static com.facebook.presto.spi.type.BooleanType.BOOLEAN;
+import static com.facebook.presto.spi.type.Chars.truncateToLengthAndTrimSpaces;
+import static com.facebook.presto.spi.type.DateType.DATE;
+import static com.facebook.presto.spi.type.DoubleType.DOUBLE;
+import static com.facebook.presto.spi.type.IntegerType.INTEGER;
+import static com.facebook.presto.spi.type.RealType.REAL;
 import static com.facebook.presto.spi.type.RowType.field;
+import static com.facebook.presto.spi.type.SmallintType.SMALLINT;
 import static com.facebook.presto.spi.type.TimeZoneKey.UTC_KEY;
+import static com.facebook.presto.spi.type.TimestampType.TIMESTAMP;
+import static com.facebook.presto.spi.type.TinyintType.TINYINT;
 import static com.facebook.presto.spi.type.VarbinaryType.VARBINARY;
 import static com.facebook.presto.spi.type.VarcharType.VARCHAR;
 import static com.facebook.presto.spi.type.VarcharType.createUnboundedVarcharType;
 import static com.facebook.presto.spi.type.Varchars.isVarcharType;
+import static com.facebook.presto.spi.type.Varchars.truncateToLength;
 import static com.google.common.base.Functions.constant;
 import static com.google.common.collect.Iterables.transform;
+import static io.airlift.slice.Slices.utf8Slice;
 import static io.airlift.units.DataSize.succinctBytes;
 import static java.util.Arrays.asList;
 import static java.util.Arrays.stream;
 import static java.util.Collections.singletonList;
-import static org.apache.hadoop.hive.serde2.objectinspector.ObjectInspectorFactory.getStandardStructObjectInspector;
 import static org.apache.parquet.column.ParquetProperties.WriterVersion.PARQUET_2_0;
 import static org.testng.Assert.assertEquals;
 import static org.testng.Assert.assertFalse;
@@ -223,7 +235,7 @@ public class ParquetTester
                 int entries = nextRandomBetween(random, MIN_ENTRIES, MAX_ENTRIES);
                 for (int entryId = 0; entryId < entries; entryId++) {
                     String value = "key" + random.nextInt(10_000_000);
-                    createUnboundedVarcharType().writeSlice(mapBuilder, Slices.utf8Slice(value));
+                    createUnboundedVarcharType().writeSlice(mapBuilder, utf8Slice(value));
                     expectValueBuilder.add(value);
                 }
                 builder.closeEntry();
@@ -395,15 +407,17 @@ public class ParquetTester
                         jobConf.setEnum(COMPRESSION, compressionCodecName);
                         jobConf.setBoolean(ENABLE_DICTIONARY, true);
                         jobConf.setEnum(WRITER_VERSION, version);
-                        writeParquetColumn(
-                                jobConf,
-                                tempFile.getFile(),
-                                compressionCodecName,
-                                createTableProperties(columnNames, objectInspectors),
-                                getStandardStructObjectInspector(columnNames, objectInspectors),
-                                getIterators(writeValues),
-                                parquetSchema,
-                                singleLevelArray);
+                        List<String> writeColumns = rootColumns.isPresent() ? rootColumns.get() : columnNames;
+                        writeParquetColumnPresto(tempFile.getFile(), columnTypes, columnNames, getIterators(writeValues));
+//                        writeParquetColumn(
+//                                jobConf,
+//                                tempFile.getFile(),
+//                                compressionCodecName,
+//                                createTableProperties(writeColumns, objectInspectors),
+//                                getStandardStructObjectInspector(writeColumns, objectInspectors),
+//                                getIterators(writeValues),
+//                                parquetSchema,
+//                                singleLevelArray);
                         assertFileContents(
                                 session,
                                 tempFile.getFile(),
@@ -498,10 +512,10 @@ public class ParquetTester
         if (VARBINARY.equals(type)) {
             return new SqlVarbinary(((Slice) fieldFromCursor).getBytes());
         }
-        if (DateType.DATE.equals(type)) {
+        if (DATE.equals(type)) {
             return new SqlDate(((Long) fieldFromCursor).intValue());
         }
-        if (TimestampType.TIMESTAMP.equals(type)) {
+        if (TIMESTAMP.equals(type)) {
             return new SqlTimestamp((long) fieldFromCursor, UTC_KEY);
         }
         return fieldFromCursor;
@@ -676,5 +690,111 @@ public class ParquetTester
         }
 
         return type.getObjectValue(SESSION, block, position);
+    }
+
+    private static void writeParquetColumnPresto(File outputFile, List<Type> types, List<String> columnNames, Iterator<?>[] values)
+            throws Exception
+    {
+        Preconditions.checkArgument(types.size() == 1);
+        Preconditions.checkArgument(types.size() == columnNames.size() && types.size() == values.length);
+        ParquetWriter writer = new ParquetWriter(
+                new FileOutputStream(outputFile),
+                columnNames,
+                types);
+
+        int i = 0;
+        Type type = types.get(i);
+        Iterator<?> iterator = values[i];
+        BlockBuilder blockBuilder = type.createBlockBuilder(null, 1024);
+        while (iterator.hasNext()) {
+            Object value = iterator.next();
+            writeValue(type, blockBuilder, value);
+        }
+
+        writer.write(new Page(blockBuilder.build()));
+        writer.close();
+    }
+
+    private static void writeValue(Type type, BlockBuilder blockBuilder, Object value)
+    {
+        if (value == null) {
+            blockBuilder.appendNull();
+        }
+        else {
+            if (BOOLEAN.equals(type)) {
+                type.writeBoolean(blockBuilder, (Boolean) value);
+            }
+            else if (TINYINT.equals(type) || SMALLINT.equals(type) || INTEGER.equals(type) || BIGINT.equals(type)) {
+                type.writeLong(blockBuilder, ((Number) value).longValue());
+            }
+            else if (Decimals.isShortDecimal(type)) {
+                type.writeLong(blockBuilder, ((SqlDecimal) value).toBigDecimal().unscaledValue().longValue());
+            }
+            else if (Decimals.isLongDecimal(type)) {
+                type.writeSlice(blockBuilder, Decimals.encodeUnscaledValue(((SqlDecimal) value).toBigDecimal().unscaledValue()));
+            }
+            else if (DOUBLE.equals(type)) {
+                type.writeDouble(blockBuilder, ((Number) value).doubleValue());
+            }
+            else if (REAL.equals(type)) {
+                float floatValue = ((Number) value).floatValue();
+                type.writeLong(blockBuilder, Float.floatToIntBits(floatValue));
+            }
+            else if (type instanceof VarcharType) {
+                Slice slice = truncateToLength(utf8Slice((String) value), type);
+                type.writeSlice(blockBuilder, slice);
+            }
+            else if (type instanceof CharType) {
+                Slice slice = truncateToLengthAndTrimSpaces(utf8Slice((String) value), type);
+                type.writeSlice(blockBuilder, slice);
+            }
+            else if (VARBINARY.equals(type)) {
+                type.writeSlice(blockBuilder, Slices.wrappedBuffer(((SqlVarbinary) value).getBytes()));
+            }
+            else if (DATE.equals(type)) {
+                long days = ((SqlDate) value).getDays();
+                type.writeLong(blockBuilder, days);
+            }
+            else if (TIMESTAMP.equals(type)) {
+                long millis = ((SqlTimestamp) value).getMillisUtc();
+                type.writeLong(blockBuilder, millis);
+            }
+            else {
+                String baseType = type.getTypeSignature().getBase();
+                if (StandardTypes.ARRAY.equals(baseType)) {
+                    List<?> array = (List<?>) value;
+                    Type elementType = type.getTypeParameters().get(0);
+                    BlockBuilder arrayBlockBuilder = blockBuilder.beginBlockEntry();
+                    for (Object elementValue : array) {
+                        writeValue(elementType, arrayBlockBuilder, elementValue);
+                    }
+                    blockBuilder.closeEntry();
+                }
+                else if (StandardTypes.MAP.equals(baseType)) {
+                    Map<?, ?> map = (Map<?, ?>) value;
+                    Type keyType = type.getTypeParameters().get(0);
+                    Type valueType = type.getTypeParameters().get(1);
+                    BlockBuilder mapBlockBuilder = blockBuilder.beginBlockEntry();
+                    for (Map.Entry<?, ?> entry : map.entrySet()) {
+                        writeValue(keyType, mapBlockBuilder, entry.getKey());
+                        writeValue(valueType, mapBlockBuilder, entry.getValue());
+                    }
+                    blockBuilder.closeEntry();
+                }
+                else if (StandardTypes.ROW.equals(baseType)) {
+                    List<?> array = (List<?>) value;
+                    List<Type> fieldTypes = type.getTypeParameters();
+                    BlockBuilder rowBlockBuilder = blockBuilder.beginBlockEntry();
+                    for (int fieldId = 0; fieldId < fieldTypes.size(); fieldId++) {
+                        Type fieldType = fieldTypes.get(fieldId);
+                        writeValue(fieldType, rowBlockBuilder, array.get(fieldId));
+                    }
+                    blockBuilder.closeEntry();
+                }
+                else {
+                    throw new IllegalArgumentException("Unsupported type " + type);
+                }
+            }
+        }
     }
 }
