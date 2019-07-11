@@ -37,7 +37,6 @@ import java.util.function.BiConsumer;
 
 import static com.facebook.presto.parquet.ParquetDataOutput.createDataOutput;
 import static com.facebook.presto.parquet.ParquetWriterUtils.getParquetType;
-import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkState;
 import static java.util.Objects.requireNonNull;
 import static org.apache.parquet.format.Encoding.PLAIN;
@@ -110,7 +109,7 @@ public class LongColumnWriter
         }
 
         // record values
-        checkArgument(current.getBlock().getPositionCount() > 0, "Block is empty");
+        //checkArgument(current.getBlock().getPositionCount() > 0, "Block is empty");
         for (int position = 0; position < current.getBlock().getPositionCount(); position++) {
             if (!current.getBlock().isNull(position)) {
                 writer.accept(current.getBlock(), position);
