@@ -2,6 +2,7 @@ package com.facebook.presto.parquet;
 
 import com.facebook.presto.spi.block.Block;
 import com.facebook.presto.spi.block.ColumnarArray;
+import com.facebook.presto.spi.block.ColumnarMap;
 import com.facebook.presto.spi.block.ColumnarRow;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.AbstractIterator;
@@ -45,6 +46,35 @@ public abstract class DefValueV2
     }
 
     static DefValueV2 getIterator(ColumnarRow block, int maxDefinitionLevel)
+    {
+        return new DefValueV2()
+        {
+            private int position = -1;
+
+            @Override
+            boolean end()
+            {
+                return true;
+            }
+
+            @Override
+            protected Optional<Integer> computeNext()
+            {
+                position++;
+                if (position == block.getPositionCount()) {
+                    return endOfData();
+                }
+                if (block.isNull(position)) {
+                    return Optional.of(maxDefinitionLevel - 1);
+                }
+                else {
+                    return Optional.empty();
+                }
+            }
+        };
+    }
+
+    static DefValueV2 getIterator(ColumnarMap block, int maxDefinitionLevel)
     {
         return new DefValueV2()
         {

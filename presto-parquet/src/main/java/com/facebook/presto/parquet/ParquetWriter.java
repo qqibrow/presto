@@ -108,7 +108,10 @@ public class ParquetWriter
         @Override
         public ColumnWriter map(GroupType map, ColumnWriter key, ColumnWriter value)
         {
-            throw new UnsupportedOperationException("not supported");
+            String[] path = currentPath();
+            int fieldDefinitionLevel = type.getMaxDefinitionLevel(path);
+            int fieldRepetitionLevel = type.getMaxRepetitionLevel(path);
+            return new MapColumnWriter(key, value, fieldDefinitionLevel, fieldRepetitionLevel);
         }
 
         @Override
