@@ -55,7 +55,7 @@ public class ArrayColumnWriter
                     new DefinitionValueIterator.ArrayIterator(columnTrunk.getDefIterator(), columnarArray, maxDefinitionLevel),
                     new RepetitionValueIterator.ArrayIterator(columnTrunk.getRepIterator(), columnarArray, maxRepetitionLevel),
                     ImmutableList.<DefValueV2>builder().addAll(columnTrunk.getDefList()).add(DefValueV2.getIterator(columnarArray, maxDefinitionLevel)).build(),
-                    ImmutableList.<RepValueV2>builder().addAll(columnTrunk.getRepValueV2List()).add(RepValueV2.getIterator(columnarArray, maxDefinitionLevel)).build());
+                    ImmutableList.<RepValueV2>builder().addAll(columnTrunk.getRepValueV2List()).add(RepValueV2.getIterator(columnarArray, maxRepetitionLevel)).build());
         }
         elementWriter.writeBlock(current);
     }
