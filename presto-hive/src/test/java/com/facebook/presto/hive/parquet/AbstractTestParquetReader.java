@@ -135,7 +135,7 @@ public abstract class AbstractTestParquetReader
     public void testArray()
             throws Exception
     {
-        Iterable<List<Integer>> values = createTestArrays(limit(cycle(asList(1, null, 3, 5, null, null, null, 7, 11, null, 13, 17)), 1));
+        Iterable<List<Integer>> values = createTestArrays(limit(cycle(asList(1, null, 3, 5, null, null, null, 7, 11, null, 13, 17)), 30_000));
         tester.testRoundTrip(getStandardListObjectInspector(javaIntObjectInspector), values, values, new ArrayType(INTEGER));
     }
 
@@ -1602,17 +1602,14 @@ public abstract class AbstractTestParquetReader
         Iterator<T> valuesIter = values.iterator();
         List<T> array = new ArrayList<>();
         while (valuesIter.hasNext()) {
-            if (ThreadLocalRandom.current().nextBoolean() && !array.isEmpty()) {
+            if (ThreadLocalRandom.current().nextBoolean()) {
                 arrays.add(array);
                 array = new ArrayList<>();
             }
-//            if (ThreadLocalRandom.current().nextInt(10) == 0) {
-//                arrays.add(Collections.emptyList());
-//            }
+            if (ThreadLocalRandom.current().nextInt(10) == 0) {
+                arrays.add(Collections.emptyList());
+            }
             array.add(valuesIter.next());
-        }
-        if (!array.isEmpty()) {
-            arrays.add(array);
         }
         return arrays;
     }
