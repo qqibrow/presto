@@ -17,6 +17,7 @@ import com.facebook.presto.spi.block.Block;
 
 import java.util.Collections;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Optional;
 
 public class ColumnTrunk
@@ -24,19 +25,27 @@ public class ColumnTrunk
     private final Block block;
     private final DefinitionValueIterator defIterator;
     private final RepetitionValueIterator repIterator;
+    private final List<DefValueV2> list;
 
     ColumnTrunk(Block block)
     {
         this.block = block;
         this.defIterator = null;
         this.repIterator = null;
+        this.list = null;
     }
 
-    ColumnTrunk(Block block, DefinitionValueIterator defIterator, RepetitionValueIterator repIterator)
+    List<DefValueV2> getList()
+    {
+        return list;
+    }
+
+    ColumnTrunk(Block block, DefinitionValueIterator defIterator, RepetitionValueIterator repIterator, List<DefValueV2> defValueV2List)
     {
         this.block = block;
         this.defIterator = defIterator;
         this.repIterator = repIterator;
+        this.list = defValueV2List;
     }
 
     public Block getBlock()

@@ -13,6 +13,7 @@
  */
 package com.facebook.presto.parquet;
 
+import com.facebook.presto.parquet.DefValueV2.DefDefIterator;
 import com.facebook.presto.spi.block.Block;
 import com.facebook.presto.spi.type.Type;
 import com.google.common.collect.ImmutableList;
@@ -31,7 +32,6 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Optional;
 import java.util.function.BiConsumer;
 
 import static com.facebook.presto.parquet.ParquetDataOutput.createDataOutput;
@@ -96,12 +96,14 @@ public class LongColumnWriter
         if (!columnTrunk.getDefIterator().hasNext()) {
             current = new ColumnTrunk(columnTrunk.getBlock(),
                     new DefinitionValueIterator.PrimitiveIterator(columnTrunk.getBlock(), maxDefinitionLevel),
-                    new RepetitionValueIterator.BlockIterator(columnTrunk.getBlock()));
+                    new RepetitionValueIterator.BlockIterator(columnTrunk.getBlock()),
+                    ImmutableList.of(DefValueV2.getIterator(columnTrunk.getBlock(), maxDefinitionLevel)));
         }
         else {
             current = new ColumnTrunk(columnTrunk.getBlock(),
                     new DefinitionValueIterator.PrimitiveIterator(columnTrunk.getDefIterator(), columnTrunk.getBlock(), maxDefinitionLevel),
-                    new RepetitionValueIterator.BlockIterator(columnTrunk.getRepIterator(), columnTrunk.getBlock()));
+                    new RepetitionValueIterator.BlockIterator(columnTrunk.getRepIterator(), columnTrunk.getBlock()),
+                    ImmutableList.<DefValueV2>builder().addAll(columnTrunk.getList()).add(DefValueV2.getIterator(columnTrunk.getBlock(), maxDefinitionLevel)).build());
         }
 
         // record values
@@ -113,13 +115,12 @@ public class LongColumnWriter
         }
 
         // write definitionLevels
-        Iterator<Optional<Integer>> defIterator = current.getDefIterator();
+        Iterator<Integer> defIterator = new DefDefIterator(current.getList());
         while (defIterator.hasNext()) {
-            Optional<Integer> next = defIterator.next();
-            checkArgument(next.isPresent());
+            int next = defIterator.next();
             try {
-                definitionLevel.writeInt(next.get());
-                if (next.get() != maxDefinitionLevel) {
+                definitionLevel.writeInt(next);
+                if (next != maxDefinitionLevel) {
                     nullCounts++;
                 }
                 rows++;

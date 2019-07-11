@@ -51,12 +51,14 @@ public class StructColumnWriter
             if (!columnTrunk.getDefIterator().hasNext()) {
                 current = new ColumnTrunk(block,
                         new DefinitionValueIterator.RowIterator(columnarRow, maxDefinitionLevel),
-                        new RepetitionValueIterator.BlockIterator(columnTrunk.getBlock()));
+                        new RepetitionValueIterator.BlockIterator(columnTrunk.getBlock()),
+                        ImmutableList.of(DefValueV2.getIterator(columnarRow, maxDefinitionLevel)));
             }
             else {
                 current = new ColumnTrunk(block,
                         new DefinitionValueIterator.RowIterator(columnTrunk.getDefIterator(), columnarRow, maxDefinitionLevel),
-                        new RepetitionValueIterator.BlockIterator(columnTrunk.getRepIterator(), columnTrunk.getBlock()));
+                        new RepetitionValueIterator.BlockIterator(columnTrunk.getRepIterator(), columnTrunk.getBlock()),
+                        ImmutableList.<DefValueV2>builder().addAll(columnTrunk.getList()).add(DefValueV2.getIterator(columnarRow, maxDefinitionLevel)).build());
             }
             columnWriter.writeBlock(current);
         }
