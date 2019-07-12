@@ -14,6 +14,7 @@
 package com.facebook.presto.parquet;
 
 import com.facebook.presto.spi.type.BigintType;
+import com.facebook.presto.spi.type.BooleanType;
 import com.facebook.presto.spi.type.IntegerType;
 import com.facebook.presto.spi.type.Type;
 import com.facebook.presto.spi.type.VarcharType;
@@ -22,6 +23,8 @@ import com.google.common.collect.ImmutableList;
 import io.airlift.slice.OutputStreamSliceOutput;
 import io.airlift.slice.Slice;
 import io.airlift.slice.Slices;
+import org.apache.parquet.column.ColumnDescriptor;
+import org.apache.parquet.column.ParquetProperties;
 import org.apache.parquet.format.ColumnChunk;
 import org.apache.parquet.format.ColumnMetaData;
 import org.apache.parquet.format.RowGroup;
@@ -68,11 +71,13 @@ public class ParquetWriter
             extends ParquetTypeVisitor<ColumnWriter>
     {
         private final MessageType type;
+        private final ParquetProperties parquetProperties;
         private final ImmutableList.Builder<ColumnWriter> builder = ImmutableList.builder();
 
-        WriteBuilder(MessageType type)
+        WriteBuilder(MessageType type, ParquetProperties parquetProperties)
         {
             this.type = type;
+            this.parquetProperties = parquetProperties;
         }
 
         List<ColumnWriter> build()
@@ -120,12 +125,15 @@ public class ParquetWriter
             String[] path = currentPath();
             int fieldDefinitionLevel = type.getMaxDefinitionLevel(path);
             int fieldRepetitionLevel = type.getMaxRepetitionLevel(path);
-            return new PrimitiveColumnWriter(getType(primitive), ImmutableList.copyOf(path), fieldDefinitionLevel, fieldRepetitionLevel);
+            ColumnDescriptor columnDescriptor = new ColumnDescriptor(path, primitive, fieldRepetitionLevel, fieldDefinitionLevel);
+            return new PrimitiveColumnWriter(getType(primitive), ImmutableList.copyOf(path), fieldDefinitionLevel, fieldRepetitionLevel, parquetProperties.newValuesWriter(columnDescriptor));
         }
 
         Type getType(PrimitiveType primitive)
         {
             switch (primitive.getPrimitiveTypeName()) {
+                case BOOLEAN:
+                    return BooleanType.BOOLEAN;
                 case BINARY:
                     return VarcharType.VARCHAR;
                 case INT32:
@@ -146,7 +154,6 @@ public class ParquetWriter
                     path[i] = iter.next();
                 }
             }
-
             return path;
         }
 
@@ -175,7 +182,9 @@ public class ParquetWriter
 
         this.messageType = ParquetSchemaConverter.convert(types, names);
         System.out.println(messageType);
-        WriteBuilder writeBuilder = new WriteBuilder(messageType);
+
+        ParquetProperties parquetProperties = ParquetProperties.builder().withWriterVersion(ParquetProperties.WriterVersion.PARQUET_1_0).withDictionaryEncoding(false).build();
+        WriteBuilder writeBuilder = new WriteBuilder(messageType, parquetProperties);
         ParquetTypeVisitor.visit(messageType, writeBuilder);
         this.columnWriters = writeBuilder.build();
         this.metadataWriter = new MetadataWriter();

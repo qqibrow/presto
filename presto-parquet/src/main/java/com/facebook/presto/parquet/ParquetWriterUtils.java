@@ -41,7 +41,7 @@ public final class ParquetWriterUtils
     public static BiConsumer<Block, Integer> getWriter(com.facebook.presto.spi.type.Type type, ValuesWriter valuesWriter)
     {
         if (BOOLEAN.equals(type)) {
-            throw new PrestoException(NOT_SUPPORTED, format("Unsupported type in parquet writer: %s", type));
+            return (block, i) -> valuesWriter.writeBoolean(type.getBoolean(block, i));
         }
         if (INTEGER.equals(type)) {
             return (block, i) -> valuesWriter.writeInteger((int) type.getLong(block, i));

@@ -21,7 +21,6 @@ import io.airlift.slice.Slices;
 import org.apache.parquet.bytes.BytesUtils;
 import org.apache.parquet.bytes.HeapByteBufferAllocator;
 import org.apache.parquet.column.values.ValuesWriter;
-import org.apache.parquet.column.values.plain.PlainValuesWriter;
 import org.apache.parquet.column.values.rle.RunLengthBitPackingHybridEncoder;
 import org.apache.parquet.format.ColumnMetaData;
 import org.apache.parquet.format.CompressionCodec;
@@ -70,14 +69,14 @@ public class PrimitiveColumnWriter
 
     private final int maxDefinitionLevel;
 
-    public PrimitiveColumnWriter(Type type, List<String> name, int maxDefinitionLevel, int maxRepetitionLevel)
+    public PrimitiveColumnWriter(Type type, List<String> name, int maxDefinitionLevel, int maxRepetitionLevel, ValuesWriter valuesWriter)
     {
         this.type = requireNonNull(type, "type is null");
         HeapByteBufferAllocator allocator = HeapByteBufferAllocator.getInstance();
-        this.valuesWriter = new PlainValuesWriter(INITIAL_SLAB_SIZE, DEFAULT_PAGE_SIZE, allocator);
+        this.valuesWriter = requireNonNull(valuesWriter);
         this.definitionLevel = new RunLengthBitPackingHybridEncoder(BytesUtils.getWidthFromMaxInt(maxDefinitionLevel), INITIAL_SLAB_SIZE, DEFAULT_PAGE_SIZE, allocator);
         this.replicationLevel = new RunLengthBitPackingHybridEncoder(BytesUtils.getWidthFromMaxInt(maxRepetitionLevel), INITIAL_SLAB_SIZE, DEFAULT_PAGE_SIZE, allocator);
-        this.writer = ParquetWriterUtils.getWriter(this.type, valuesWriter);
+        this.writer = ParquetWriterUtils.getWriter(this.type, this.valuesWriter);
 
         this.path = ImmutableList.copyOf(name);
         this.parquetType = getParquetType(type);
