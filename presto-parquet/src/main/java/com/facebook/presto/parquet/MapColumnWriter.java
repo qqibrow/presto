@@ -45,8 +45,8 @@ public class MapColumnWriter
         ImmutableList<DefValueV2> defList = ImmutableList.<DefValueV2>builder().addAll(columnTrunk.getDefList()).add(DefValueV2.getIterator(columnarMap, maxDefinitionLevel)).build();
         ImmutableList<RepValueV2> repList = ImmutableList.<RepValueV2>builder().addAll(columnTrunk.getRepValueV2List()).add(RepValueV2.getIterator(columnTrunk.getBlock())).build();
 
-        keyWriter.writeBlock(new ColumnTrunk(columnarMap.getKeysBlock(), null, null, defList, repList));
-        valueWriter.writeBlock(new ColumnTrunk(columnarMap.getValuesBlock(), null, null, defList, repList));
+        keyWriter.writeBlock(new ColumnTrunk(columnarMap.getKeysBlock(), defList, repList));
+        valueWriter.writeBlock(new ColumnTrunk(columnarMap.getValuesBlock(), defList, repList));
     }
 
     @Override

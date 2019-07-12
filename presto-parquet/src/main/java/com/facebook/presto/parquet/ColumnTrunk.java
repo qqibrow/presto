@@ -14,27 +14,21 @@
 package com.facebook.presto.parquet;
 
 import com.facebook.presto.spi.block.Block;
+import com.google.common.collect.ImmutableList;
 
-import java.util.Collections;
-import java.util.Iterator;
 import java.util.List;
-import java.util.Optional;
 
 public class ColumnTrunk
 {
     private final Block block;
-    private final DefinitionValueIterator defIterator;
-    private final RepetitionValueIterator repIterator;
     private final List<DefValueV2> list;
     private final List<RepValueV2> repValueV2List;
 
     ColumnTrunk(Block block)
     {
         this.block = block;
-        this.defIterator = null;
-        this.repIterator = null;
-        this.list = null;
-        this.repValueV2List = null;
+        this.list = ImmutableList.of();
+        this.repValueV2List = ImmutableList.of();
     }
 
     List<DefValueV2> getDefList()
@@ -47,11 +41,9 @@ public class ColumnTrunk
         return repValueV2List;
     }
 
-    ColumnTrunk(Block block, DefinitionValueIterator defIterator, RepetitionValueIterator repIterator, List<DefValueV2> defValueV2List, List<RepValueV2> repValueV2List)
+    ColumnTrunk(Block block, List<DefValueV2> defValueV2List, List<RepValueV2> repValueV2List)
     {
         this.block = block;
-        this.defIterator = defIterator;
-        this.repIterator = repIterator;
         this.list = defValueV2List;
         this.repValueV2List = repValueV2List;
     }
@@ -59,15 +51,5 @@ public class ColumnTrunk
     public Block getBlock()
     {
         return block;
-    }
-
-    public Iterator<Optional<Integer>> getDefIterator()
-    {
-        return defIterator == null ? Collections.emptyIterator() : defIterator.iterator();
-    }
-
-    public Iterator<RepetitionValueIterator.RepetitionValue> getRepIterator()
-    {
-        return repIterator == null ? Collections.emptyIterator() : repIterator.iterator();
     }
 }

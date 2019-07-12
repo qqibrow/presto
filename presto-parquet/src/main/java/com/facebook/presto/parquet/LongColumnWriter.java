@@ -91,25 +91,11 @@ public class LongColumnWriter
     {
         checkState(!closed);
 
-        // empty iterator
-        ColumnTrunk current;
-        if (!columnTrunk.getDefIterator().hasNext()) {
-            current = new ColumnTrunk(columnTrunk.getBlock(),
-                    new DefinitionValueIterator.PrimitiveIterator(columnTrunk.getBlock(), maxDefinitionLevel),
-                    new RepetitionValueIterator.BlockIterator(columnTrunk.getBlock()),
-                    ImmutableList.of(DefValueV2.getIterator(columnTrunk.getBlock(), maxDefinitionLevel)),
-                    ImmutableList.of(RepValueV2.getIterator(columnTrunk.getBlock())));
-        }
-        else {
-            current = new ColumnTrunk(columnTrunk.getBlock(),
-                    new DefinitionValueIterator.PrimitiveIterator(columnTrunk.getDefIterator(), columnTrunk.getBlock(), maxDefinitionLevel),
-                    new RepetitionValueIterator.BlockIterator(columnTrunk.getRepIterator(), columnTrunk.getBlock()),
-                    ImmutableList.<DefValueV2>builder().addAll(columnTrunk.getDefList()).add(DefValueV2.getIterator(columnTrunk.getBlock(), maxDefinitionLevel)).build(),
-                    ImmutableList.<RepValueV2>builder().addAll(columnTrunk.getRepValueV2List()).add(RepValueV2.getIterator(columnTrunk.getBlock())).build());
-        }
+        ColumnTrunk current = new ColumnTrunk(columnTrunk.getBlock(),
+                ImmutableList.<DefValueV2>builder().addAll(columnTrunk.getDefList()).add(DefValueV2.getIterator(columnTrunk.getBlock(), maxDefinitionLevel)).build(),
+                ImmutableList.<RepValueV2>builder().addAll(columnTrunk.getRepValueV2List()).add(RepValueV2.getIterator(columnTrunk.getBlock())).build());
 
         // record values
-        //checkArgument(current.getBlock().getPositionCount() > 0, "Block is empty");
         for (int position = 0; position < current.getBlock().getPositionCount(); position++) {
             if (!current.getBlock().isNull(position)) {
                 writer.accept(current.getBlock(), position);

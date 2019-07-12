@@ -41,22 +41,9 @@ public class ArrayColumnWriter
     {
         ColumnarArray columnarArray = ColumnarArray.toColumnarArray(columnTrunk.getBlock());
         Block block = columnarArray.getElementsBlock();
-        ColumnTrunk current;
-
-        if (!columnTrunk.getDefIterator().hasNext()) {
-            current = new ColumnTrunk(block,
-                    new DefinitionValueIterator.ArrayIterator(columnarArray, maxDefinitionLevel),
-                    new RepetitionValueIterator.ArrayIterator(columnarArray),
-                    ImmutableList.of(DefValueV2.getIterator(columnarArray, maxDefinitionLevel)),
-                    ImmutableList.of(RepValueV2.getIterator(columnarArray, maxRepetitionLevel)));
-        }
-        else {
-            current = new ColumnTrunk(block,
-                    new DefinitionValueIterator.ArrayIterator(columnTrunk.getDefIterator(), columnarArray, maxDefinitionLevel),
-                    new RepetitionValueIterator.ArrayIterator(columnTrunk.getRepIterator(), columnarArray, maxRepetitionLevel),
-                    ImmutableList.<DefValueV2>builder().addAll(columnTrunk.getDefList()).add(DefValueV2.getIterator(columnarArray, maxDefinitionLevel)).build(),
-                    ImmutableList.<RepValueV2>builder().addAll(columnTrunk.getRepValueV2List()).add(RepValueV2.getIterator(columnarArray, maxRepetitionLevel)).build());
-        }
+        ColumnTrunk current = new ColumnTrunk(block,
+                ImmutableList.<DefValueV2>builder().addAll(columnTrunk.getDefList()).add(DefValueV2.getIterator(columnarArray, maxDefinitionLevel)).build(),
+                ImmutableList.<RepValueV2>builder().addAll(columnTrunk.getRepValueV2List()).add(RepValueV2.getIterator(columnarArray, maxRepetitionLevel)).build());
         elementWriter.writeBlock(current);
     }
 
