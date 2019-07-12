@@ -120,7 +120,7 @@ public class ParquetWriter
             String[] path = currentPath();
             int fieldDefinitionLevel = type.getMaxDefinitionLevel(path);
             int fieldRepetitionLevel = type.getMaxRepetitionLevel(path);
-            return new LongColumnWriter(getType(primitive), ImmutableList.copyOf(path), fieldDefinitionLevel, fieldRepetitionLevel);
+            return new PrimitiveColumnWriter(getType(primitive), ImmutableList.copyOf(path), fieldDefinitionLevel, fieldRepetitionLevel);
         }
 
         Type getType(PrimitiveType primitive)

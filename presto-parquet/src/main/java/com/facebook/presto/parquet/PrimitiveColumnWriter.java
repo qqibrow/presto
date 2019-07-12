@@ -41,7 +41,7 @@ import static com.google.common.base.Preconditions.checkState;
 import static java.util.Objects.requireNonNull;
 import static org.apache.parquet.format.Encoding.PLAIN;
 
-public class LongColumnWriter
+public class PrimitiveColumnWriter
         implements ColumnWriter
 {
     private static final int DEFAULT_PAGE_SIZE = 1024 * 1024;
@@ -70,7 +70,7 @@ public class LongColumnWriter
 
     private final int maxDefinitionLevel;
 
-    public LongColumnWriter(Type type, List<String> name, int maxDefinitionLevel, int maxRepetitionLevel)
+    public PrimitiveColumnWriter(Type type, List<String> name, int maxDefinitionLevel, int maxRepetitionLevel)
     {
         this.type = requireNonNull(type, "type is null");
         HeapByteBufferAllocator allocator = HeapByteBufferAllocator.getInstance();
