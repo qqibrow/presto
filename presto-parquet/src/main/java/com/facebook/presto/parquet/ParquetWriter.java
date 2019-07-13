@@ -226,9 +226,10 @@ public class ParquetWriter
         closed = true;
         columnWriters.forEach(ColumnWriter::close);
 
-        if (rows > 0) {
-            flush();
-        }
+        // TODO Whatever how many rows after last flush, flush
+        // this is a hack way to avoid error when written file is empty
+        // Could potentially write unnecessary empty row group
+        flush();
         flushFooter();
         outputStream.close();
     }
