@@ -21,8 +21,8 @@ import java.util.List;
 public class ColumnTrunk
 {
     private final Block block;
-    private final List<DefValueV2> list;
-    private final List<RepValueV2> repValueV2List;
+    private final List<DefIteratorProvider> list;
+    private final List<RepIteratorProvider> repValueV2List;
 
     ColumnTrunk(Block block)
     {
@@ -31,17 +31,17 @@ public class ColumnTrunk
         this.repValueV2List = ImmutableList.of();
     }
 
-    List<DefValueV2> getDefList()
+    List<DefIteratorProvider> getDefList()
     {
         return list;
     }
 
-    List<RepValueV2> getRepValueV2List()
+    List<RepIteratorProvider> getRepValueV2List()
     {
         return repValueV2List;
     }
 
-    ColumnTrunk(Block block, List<DefValueV2> defValueV2List, List<RepValueV2> repValueV2List)
+    ColumnTrunk(Block block, List<DefIteratorProvider> defValueV2List, List<RepIteratorProvider> repValueV2List)
     {
         this.block = block;
         this.list = defValueV2List;

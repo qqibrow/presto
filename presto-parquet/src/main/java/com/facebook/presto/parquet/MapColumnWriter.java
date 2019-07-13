@@ -42,8 +42,8 @@ public class MapColumnWriter
     {
         ColumnarMap columnarMap = ColumnarMap.toColumnarMap(columnTrunk.getBlock());
 
-        ImmutableList<DefValueV2> defList = ImmutableList.<DefValueV2>builder().addAll(columnTrunk.getDefList()).add(DefValueV2.getIterator(columnarMap, maxDefinitionLevel)).build();
-        ImmutableList<RepValueV2> repList = ImmutableList.<RepValueV2>builder().addAll(columnTrunk.getRepValueV2List()).add(RepValueV2.getIterator(columnTrunk.getBlock())).build();
+        ImmutableList<DefIteratorProvider> defList = ImmutableList.<DefIteratorProvider>builder().addAll(ImmutableList.copyOf(columnTrunk.getDefList())).add(new DefIteratorProvider.ColumnMapIteratorProvider(columnarMap, maxDefinitionLevel)).build();
+        ImmutableList<RepIteratorProvider> repList = ImmutableList.<RepIteratorProvider>builder().addAll(ImmutableList.copyOf(columnTrunk.getRepValueV2List())).add(new RepIteratorProvider.BlockRepIterator(columnTrunk.getBlock())).build();
 
         keyWriter.writeBlock(new ColumnTrunk(columnarMap.getKeysBlock(), defList, repList));
         valueWriter.writeBlock(new ColumnTrunk(columnarMap.getValuesBlock(), defList, repList));
@@ -87,4 +87,3 @@ public class MapColumnWriter
         valueWriter.reset();
     }
 }
-

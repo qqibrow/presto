@@ -42,13 +42,12 @@ public class StructColumnWriter
     {
         ColumnarRow columnarRow = ColumnarRow.toColumnarRow(columnTrunk.getBlock());
         Preconditions.checkArgument(columnarRow.getFieldCount() == structFields.size(), "");
+        List<DefIteratorProvider> defIteratorProviders = ImmutableList.<DefIteratorProvider>builder().addAll(columnTrunk.getDefList()).add(new DefIteratorProvider.ColumnRowIteratorProvider(columnarRow, maxDefinitionLevel)).build();
+        List<RepIteratorProvider> repIteratorProviders = ImmutableList.<RepIteratorProvider>builder().addAll(columnTrunk.getRepValueV2List()).add(new RepIteratorProvider.BlockRepIterator(columnTrunk.getBlock())).build();
         for (int i = 0; i < structFields.size(); ++i) {
             ColumnWriter columnWriter = structFields.get(i);
             Block block = columnarRow.getField(i);
-            ColumnTrunk current = new ColumnTrunk(block,
-                    ImmutableList.<DefValueV2>builder().addAll(columnTrunk.getDefList()).add(DefValueV2.getIterator(columnarRow, maxDefinitionLevel)).build(),
-                    ImmutableList.<RepValueV2>builder().addAll(columnTrunk.getRepValueV2List()).add(RepValueV2.getIterator(columnTrunk.getBlock())).build());
-            columnWriter.writeBlock(current);
+            columnWriter.writeBlock(new ColumnTrunk(block, defIteratorProviders, repIteratorProviders));
         }
     }
 

@@ -13,6 +13,8 @@
  */
 package com.facebook.presto.parquet;
 
+import com.facebook.presto.parquet.DefIteratorProvider.ColumnArrayIteratorProvider;
+import com.facebook.presto.parquet.RepIteratorProvider.ArrayRepIterator;
 import com.facebook.presto.spi.block.Block;
 import com.facebook.presto.spi.block.ColumnarArray;
 import com.google.common.collect.ImmutableList;
@@ -42,8 +44,8 @@ public class ArrayColumnWriter
         ColumnarArray columnarArray = ColumnarArray.toColumnarArray(columnTrunk.getBlock());
         Block block = columnarArray.getElementsBlock();
         ColumnTrunk current = new ColumnTrunk(block,
-                ImmutableList.<DefValueV2>builder().addAll(columnTrunk.getDefList()).add(DefValueV2.getIterator(columnarArray, maxDefinitionLevel)).build(),
-                ImmutableList.<RepValueV2>builder().addAll(columnTrunk.getRepValueV2List()).add(RepValueV2.getIterator(columnarArray, maxRepetitionLevel)).build());
+                ImmutableList.<DefIteratorProvider>builder().addAll(columnTrunk.getDefList()).add(new ColumnArrayIteratorProvider(columnarArray, maxDefinitionLevel)).build(),
+                ImmutableList.<RepIteratorProvider>builder().addAll(columnTrunk.getRepValueV2List()).add(new ArrayRepIterator(columnarArray, maxRepetitionLevel)).build());
         elementWriter.writeBlock(current);
     }
 

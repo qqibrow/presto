@@ -13,7 +13,6 @@
  */
 package com.facebook.presto.parquet;
 
-import com.facebook.presto.parquet.DefValueV2.DefDefIterator;
 import com.facebook.presto.spi.block.Block;
 import com.facebook.presto.spi.type.Type;
 import com.google.common.collect.ImmutableList;
@@ -33,6 +32,7 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.function.BiConsumer;
+import java.util.stream.Collectors;
 
 import static com.facebook.presto.parquet.ParquetDataOutput.createDataOutput;
 import static com.facebook.presto.parquet.ParquetWriterUtils.getParquetType;
@@ -91,8 +91,8 @@ public class PrimitiveColumnWriter
         checkState(!closed);
 
         ColumnTrunk current = new ColumnTrunk(columnTrunk.getBlock(),
-                ImmutableList.<DefValueV2>builder().addAll(columnTrunk.getDefList()).add(DefValueV2.getIterator(columnTrunk.getBlock(), maxDefinitionLevel)).build(),
-                ImmutableList.<RepValueV2>builder().addAll(columnTrunk.getRepValueV2List()).add(RepValueV2.getIterator(columnTrunk.getBlock())).build());
+                ImmutableList.<DefIteratorProvider>builder().addAll(columnTrunk.getDefList()).add(new DefIteratorProvider.BlockDefValueProvider(columnTrunk.getBlock(), maxDefinitionLevel)).build(),
+                ImmutableList.<RepIteratorProvider>builder().addAll(columnTrunk.getRepValueV2List()).add(new RepIteratorProvider.BlockRepIterator(columnTrunk.getBlock())).build());
 
         // record values
         for (int position = 0; position < current.getBlock().getPositionCount(); position++) {
@@ -103,7 +103,7 @@ public class PrimitiveColumnWriter
 
         // write definitionLevels
         List<Integer> defs = new ArrayList<>();
-        Iterator<Integer> defIterator = new DefDefIterator(current.getDefList());
+        Iterator<Integer> defIterator = new DefIteratorProvider.DefDefIterator(current.getDefList().stream().map(DefIteratorProvider::getIterator).collect(Collectors.toList()));
         while (defIterator.hasNext()) {
             int next = defIterator.next();
             try {
@@ -122,7 +122,7 @@ public class PrimitiveColumnWriter
 
         // write reptitionLevel
         List<Integer> reps = new ArrayList<>();
-        Iterator<Integer> repIterator = new RepValueV2.RepRepIterator(current.getRepValueV2List());
+        Iterator<Integer> repIterator = new RepIteratorProvider.RepRepIterator(current.getRepValueV2List().stream().map(RepIteratorProvider::getIterator).collect(Collectors.toList()));
         while (repIterator.hasNext()) {
             int next = repIterator.next();
             try {
