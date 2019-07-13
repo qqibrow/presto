@@ -137,25 +137,35 @@ public interface DefIteratorProvider
             return new DefValueV2()
             {
                 private int position = -1;
+                private FixedValueIterator iterator;
 
                 @Override
                 boolean end()
                 {
-                    return true;
+                    return iterator == null || !iterator.hasNext();
                 }
 
                 @Override
                 protected Optional<Integer> computeNext()
                 {
+                    if (iterator != null && iterator.hasNext()) {
+                        return iterator.next();
+                    }
                     position++;
                     if (position == columnarMap.getPositionCount()) {
                         return endOfData();
                     }
                     if (columnarMap.isNull(position)) {
-                        return Optional.of(maxDefinitionLevel - 1);
+                        return Optional.of(maxDefinitionLevel - 2);
                     }
                     else {
-                        return Optional.empty();
+                        int arrayLength = columnarMap.getEntryCount(position);
+                        if (arrayLength == 0) {
+                            return Optional.of(maxDefinitionLevel - 1);
+                        }
+                        iterator = new FixedValueIterator(arrayLength);
+                        Preconditions.checkArgument(iterator.hasNext(), "Not support empty array yet");
+                        return iterator.next();
                     }
                 }
             };

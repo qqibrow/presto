@@ -16,6 +16,7 @@ package com.facebook.presto.parquet;
 import com.facebook.presto.parquet.RepetitionValueIterator.RepetitionValue;
 import com.facebook.presto.spi.block.Block;
 import com.facebook.presto.spi.block.ColumnarArray;
+import com.facebook.presto.spi.block.ColumnarMap;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.AbstractIterator;
 
@@ -128,6 +129,58 @@ public interface RepIteratorProvider
                     }
                     else {
                         int arrayLength = columnarArray.getLength(position);
+                        if (arrayLength == 0) {
+                            return nullValue(getValue());
+                        }
+                        iterator = new FixedValueIterator(arrayLength, getValue(), maxRepetionValue);
+                        return iterator.next();
+                    }
+                }
+            };
+        }
+    }
+
+    class MapRepIterator
+            implements RepIteratorProvider
+    {
+        private final ColumnarMap columnarArray;
+        private final int maxRepetionValue;
+
+        MapRepIterator(ColumnarMap columnarArray, int maxRepetionValue)
+        {
+            this.columnarArray = columnarArray;
+            this.maxRepetionValue = maxRepetionValue;
+        }
+
+        @Override
+        public RepValueV2 getIterator()
+        {
+            return new RepValueV2()
+            {
+                private int position = -1;
+                private FixedValueIterator iterator;
+
+                @Override
+                boolean end()
+                {
+                    return iterator == null || !iterator.hasNext();
+                }
+
+                @Override
+                protected RepetitionValue computeNext()
+                {
+                    if (iterator != null && iterator.hasNext()) {
+                        return iterator.next();
+                    }
+                    position++;
+                    if (position == columnarArray.getPositionCount()) {
+                        return endOfData();
+                    }
+                    if (columnarArray.isNull(position)) {
+                        return nullValue(getValue());
+                    }
+                    else {
+                        int arrayLength = columnarArray.getEntryCount(position);
                         if (arrayLength == 0) {
                             return nullValue(getValue());
                         }

@@ -13,6 +13,7 @@
  */
 package com.facebook.presto.parquet;
 
+import com.facebook.presto.parquet.DefIteratorProvider.ColumnMapIteratorProvider;
 import com.facebook.presto.spi.block.ColumnarMap;
 import com.google.common.collect.ImmutableList;
 import org.apache.parquet.format.ColumnMetaData;
@@ -42,8 +43,13 @@ public class MapColumnWriter
     {
         ColumnarMap columnarMap = ColumnarMap.toColumnarMap(columnTrunk.getBlock());
 
-        ImmutableList<DefIteratorProvider> defList = ImmutableList.<DefIteratorProvider>builder().addAll(ImmutableList.copyOf(columnTrunk.getDefList())).add(new DefIteratorProvider.ColumnMapIteratorProvider(columnarMap, maxDefinitionLevel)).build();
-        ImmutableList<RepIteratorProvider> repList = ImmutableList.<RepIteratorProvider>builder().addAll(ImmutableList.copyOf(columnTrunk.getRepValueV2List())).add(new RepIteratorProvider.BlockRepIterator(columnTrunk.getBlock())).build();
+        ImmutableList<DefIteratorProvider> defList = ImmutableList.<DefIteratorProvider>builder()
+                .addAll(columnTrunk.getDefList())
+                .add(new ColumnMapIteratorProvider(columnarMap, maxDefinitionLevel)).build();
+
+        ImmutableList<RepIteratorProvider> repList = ImmutableList.<RepIteratorProvider>builder()
+                .addAll(columnTrunk.getRepValueV2List())
+                .add(new RepIteratorProvider.MapRepIterator(columnarMap, maxRepetitionLevel)).build();
 
         keyWriter.writeBlock(new ColumnTrunk(columnarMap.getKeysBlock(), defList, repList));
         valueWriter.writeBlock(new ColumnTrunk(columnarMap.getValuesBlock(), defList, repList));
