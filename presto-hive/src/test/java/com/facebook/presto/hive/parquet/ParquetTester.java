@@ -749,7 +749,7 @@ public class ParquetTester
                 type.writeSlice(blockBuilder, slice);
             }
             else if (VARBINARY.equals(type)) {
-                type.writeSlice(blockBuilder, Slices.wrappedBuffer((byte[])value));
+                type.writeSlice(blockBuilder, Slices.wrappedBuffer((byte[]) value));
             }
             else if (DATE.equals(type)) {
                 long days = ((SqlDate) value).getDays();
