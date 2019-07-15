@@ -71,13 +71,15 @@ public class ParquetWriter
             extends ParquetTypeVisitor<ColumnWriter>
     {
         private final MessageType type;
+        private final ParquetSchemaConverter parquetSchemaConverter;
         private final ParquetProperties parquetProperties;
         private final ImmutableList.Builder<ColumnWriter> builder = ImmutableList.builder();
 
-        WriteBuilder(MessageType type, ParquetProperties parquetProperties)
+        WriteBuilder(ParquetSchemaConverter parquetSchemaConverter, ParquetProperties parquetProperties)
         {
-            this.type = type;
+            this.parquetSchemaConverter = parquetSchemaConverter;
             this.parquetProperties = parquetProperties;
+            this.type = this.parquetSchemaConverter.getMessageType();
         }
 
         List<ColumnWriter> build()
@@ -126,7 +128,13 @@ public class ParquetWriter
             int fieldDefinitionLevel = type.getMaxDefinitionLevel(path);
             int fieldRepetitionLevel = type.getMaxRepetitionLevel(path);
             ColumnDescriptor columnDescriptor = new ColumnDescriptor(path, primitive, fieldRepetitionLevel, fieldDefinitionLevel);
-            return new PrimitiveColumnWriter(getType(primitive), ImmutableList.copyOf(path), fieldDefinitionLevel, fieldRepetitionLevel, parquetProperties.newValuesWriter(columnDescriptor));
+            Type prestoType = requireNonNull(parquetSchemaConverter.getPrimitiveTypes().get(ImmutableList.copyOf(path)), " presto type is null");
+            return new PrimitiveColumnWriter(prestoType,
+                    ParquetTypeConverter.getType(primitive.getPrimitiveTypeName()),
+                    ImmutableList.copyOf(path),
+                    fieldDefinitionLevel,
+                    fieldRepetitionLevel,
+                    parquetProperties.newValuesWriter(columnDescriptor));
         }
 
         Type getType(PrimitiveType primitive)
@@ -180,11 +188,12 @@ public class ParquetWriter
         this.types = ImmutableList.copyOf(requireNonNull(types, "types is null"));
         this.names = ImmutableList.copyOf(requireNonNull(columnNames, "columnNames is null"));
 
-        this.messageType = ParquetSchemaConverter.convert(types, names);
+        ParquetSchemaConverter parquetSchemaConverter = new ParquetSchemaConverter(types, names);
+        this.messageType = parquetSchemaConverter.getMessageType();
         System.out.println(messageType);
 
         ParquetProperties parquetProperties = ParquetProperties.builder().withWriterVersion(ParquetProperties.WriterVersion.PARQUET_1_0).withDictionaryEncoding(false).build();
-        WriteBuilder writeBuilder = new WriteBuilder(messageType, parquetProperties);
+        WriteBuilder writeBuilder = new WriteBuilder(parquetSchemaConverter, parquetProperties);
         ParquetTypeVisitor.visit(messageType, writeBuilder);
         this.columnWriters = writeBuilder.build();
         this.metadataWriter = new MetadataWriter();

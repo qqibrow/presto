@@ -35,7 +35,6 @@ import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 
 import static com.facebook.presto.parquet.ParquetDataOutput.createDataOutput;
-import static com.facebook.presto.parquet.ParquetWriterUtils.getParquetType;
 import static com.google.common.base.Preconditions.checkState;
 import static java.util.Objects.requireNonNull;
 import static org.apache.parquet.format.Encoding.PLAIN;
@@ -69,7 +68,7 @@ public class PrimitiveColumnWriter
 
     private final int maxDefinitionLevel;
 
-    public PrimitiveColumnWriter(Type type, List<String> name, int maxDefinitionLevel, int maxRepetitionLevel, ValuesWriter valuesWriter)
+    public PrimitiveColumnWriter(Type type, org.apache.parquet.format.Type parquetType, List<String> name, int maxDefinitionLevel, int maxRepetitionLevel, ValuesWriter valuesWriter)
     {
         this.type = requireNonNull(type, "type is null");
         HeapByteBufferAllocator allocator = HeapByteBufferAllocator.getInstance();
@@ -79,7 +78,7 @@ public class PrimitiveColumnWriter
         this.writer = ParquetWriterUtils.getWriter(this.type, this.valuesWriter);
 
         this.path = ImmutableList.copyOf(name);
-        this.parquetType = getParquetType(type);
+        this.parquetType = parquetType;
         this.encodings = ImmutableList.of(PLAIN);
         this.compressionCodec = CompressionCodec.UNCOMPRESSED;
         this.maxDefinitionLevel = maxDefinitionLevel;

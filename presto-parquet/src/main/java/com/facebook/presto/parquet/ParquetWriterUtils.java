@@ -16,6 +16,7 @@ package com.facebook.presto.parquet;
 import com.facebook.presto.spi.PrestoException;
 import com.facebook.presto.spi.block.Block;
 import com.facebook.presto.spi.type.CharType;
+import com.facebook.presto.spi.type.VarbinaryType;
 import com.facebook.presto.spi.type.VarcharType;
 import io.airlift.slice.Slice;
 import org.apache.parquet.column.values.ValuesWriter;
@@ -57,6 +58,12 @@ public final class ParquetWriterUtils
                 Slice slice = type.getSlice(block, i);
                 valuesWriter.writeBytes(Binary.fromString(slice.toStringUtf8()));
             };
+        }
+        if (type instanceof VarbinaryType) {
+            return ((block, i) -> {
+                Slice slice = type.getSlice(block, i);
+                valuesWriter.writeBytes(Binary.fromConstantByteBuffer(slice.toByteBuffer()));
+            });
         }
 //        if (DATE.equals(type)) {
 //            return Type.
