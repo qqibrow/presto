@@ -53,28 +53,12 @@ public final class ParquetWriterUtils
         if (DOUBLE.equals(type)) {
             return (block, i) -> valuesWriter.writeDouble(type.getDouble(block, i));
         }
-        if (type instanceof VarcharType || type instanceof CharType) {
+        if (type instanceof VarcharType || type instanceof CharType || type instanceof VarbinaryType) {
             return (block, i) -> {
                 Slice slice = type.getSlice(block, i);
-                valuesWriter.writeBytes(Binary.fromString(slice.toStringUtf8()));
+                valuesWriter.writeBytes(Binary.fromConstantByteBuffer(slice.toByteBuffer()));
             };
         }
-        if (type instanceof VarbinaryType) {
-            return ((block, i) -> {
-                Slice slice = type.getSlice(block, i);
-                valuesWriter.writeBytes(Binary.fromConstantByteBuffer(slice.toByteBuffer()));
-            });
-        }
-//        if (DATE.equals(type)) {
-//            return Type.
-//        }
-//        if (TIMESTAMP.equals(type)) {
-//            return Type.INT96;
-//        }
-//        if (type instanceof DecimalType) {
-//            DecimalType decimalType = (DecimalType) type;
-//            return ImmutableList.of(new OrcType(OrcTypeKind.DECIMAL, decimalType.getPrecision(), decimalType.getScale()));
-//        }
         throw new PrestoException(NOT_SUPPORTED, format("Unsupported type in parquet writer: %s", type));
     }
 
