@@ -62,6 +62,7 @@ public final class ParquetRecordWriterUtil
     {
         conf.setLong(ParquetOutputFormat.BLOCK_SIZE, getParquetWriterBlockSize(session).toBytes());
         conf.setLong(ParquetOutputFormat.PAGE_SIZE, getParquetWriterPageSize(session).toBytes());
+        conf.setBoolean(ParquetOutputFormat.ENABLE_DICTIONARY, false);
 
         RecordWriter recordWriter = new MapredParquetOutputFormat()
                 .getHiveRecordWriter(conf, target, Text.class, compress, properties, Reporter.NULL);
