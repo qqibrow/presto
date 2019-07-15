@@ -101,18 +101,18 @@ public class HiveFileFormatBenchmark
 
     private static final HdfsEnvironment HDFS_ENVIRONMENT = createTestHdfsEnvironment(CONFIG);
 
-    @Param(
+    @Param({
 //            "LINEITEM",
-//            "BIGINT_SEQUENTIAL",
-//            "BIGINT_RANDOM",
-//            "VARCHAR_SMALL",
-//            "VARCHAR_LARGE",
-//            "VARCHAR_DICTIONARY",
-//            "MAP_VARCHAR_DOUBLE",
-//            "LARGE_MAP_VARCHAR_DOUBLE",
-//            "MAP_INT_DOUBLE",
-//            "LARGE_MAP_INT_DOUBLE",
-            "LARGE_ARRAY_VARCHAR")
+            "BIGINT_SEQUENTIAL",
+            "BIGINT_RANDOM",
+            "VARCHAR_SMALL",
+            "VARCHAR_LARGE",
+            "VARCHAR_DICTIONARY",
+            "MAP_VARCHAR_DOUBLE",
+            "LARGE_MAP_VARCHAR_DOUBLE",
+            "MAP_INT_DOUBLE",
+            "LARGE_MAP_INT_DOUBLE",
+            "LARGE_ARRAY_VARCHAR"})
     private DataSet dataSet;
 
     @Param("NONE")
