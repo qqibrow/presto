@@ -190,7 +190,6 @@ public class ParquetWriter
 
         ParquetSchemaConverter parquetSchemaConverter = new ParquetSchemaConverter(types, names);
         this.messageType = parquetSchemaConverter.getMessageType();
-        System.out.println(messageType);
 
         ParquetProperties parquetProperties = ParquetProperties.builder().withWriterVersion(ParquetProperties.WriterVersion.PARQUET_1_0).withDictionaryEncoding(false).build();
         WriteBuilder writeBuilder = new WriteBuilder(parquetSchemaConverter, parquetProperties);

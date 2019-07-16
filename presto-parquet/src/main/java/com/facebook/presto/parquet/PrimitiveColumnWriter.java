@@ -28,7 +28,6 @@ import org.apache.parquet.format.converter.ParquetMetadataConverter;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 import java.util.function.BiConsumer;
@@ -101,13 +100,11 @@ public class PrimitiveColumnWriter
         }
 
         // write definitionLevels
-        List<Integer> defs = new ArrayList<>();
         Iterator<Integer> defIterator = new DefIteratorProvider.DefDefIterator(current.getDefList().stream().map(DefIteratorProvider::getIterator).collect(Collectors.toList()));
         while (defIterator.hasNext()) {
             int next = defIterator.next();
             try {
                 definitionLevel.writeInt(next);
-                defs.add(next);
                 if (next != maxDefinitionLevel) {
                     nullCounts++;
                 }
@@ -117,22 +114,18 @@ public class PrimitiveColumnWriter
                 e.printStackTrace();
             }
         }
-        System.out.println("defs: " + defs);
 
         // write reptitionLevel
-        List<Integer> reps = new ArrayList<>();
         Iterator<Integer> repIterator = new RepIteratorProvider.RepRepIterator(current.getRepValueV2List().stream().map(RepIteratorProvider::getIterator).collect(Collectors.toList()));
         while (repIterator.hasNext()) {
             int next = repIterator.next();
             try {
                 replicationLevel.writeInt(next);
-                reps.add(next);
             }
             catch (IOException e) {
                 e.printStackTrace();
             }
         }
-        System.out.println("reptitions: " + reps);
     }
 
     @Override

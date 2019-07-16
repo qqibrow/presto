@@ -103,14 +103,14 @@ public class HiveFileFormatBenchmark
 
     @Param({
 //            "LINEITEM",
-            "BIGINT_SEQUENTIAL",
-            "BIGINT_RANDOM",
-            "VARCHAR_SMALL",
+            //"BIGINT_SEQUENTIAL",
+            //"BIGINT_RANDOM",
+            //"VARCHAR_SMALL",
             "VARCHAR_LARGE",
-            "VARCHAR_DICTIONARY",
-            "MAP_VARCHAR_DOUBLE",
-            "LARGE_MAP_VARCHAR_DOUBLE",
-            "MAP_INT_DOUBLE",
+            //"VARCHAR_DICTIONARY",
+            //"MAP_VARCHAR_DOUBLE",
+            //"LARGE_MAP_VARCHAR_DOUBLE",
+            //"MAP_INT_DOUBLE",
             "LARGE_MAP_INT_DOUBLE",
             "LARGE_ARRAY_VARCHAR"})
     private DataSet dataSet;
@@ -129,7 +129,7 @@ public class HiveFileFormatBenchmark
             "HIVE_PARQUET"
 //            "HIVE_DWRF",
             //"HIVE_PARQUET"
-            })
+    })
     private FileFormat fileFormat;
 
     private TestData data;
