@@ -1348,12 +1348,12 @@ public abstract class AbstractTestParquetReader
         tester.testRoundTrip(javaIntObjectInspector, writeValues, INTEGER);
         tester.testRoundTrip(javaLongObjectInspector, transform(writeValues, AbstractTestParquetReader::intToLong), BIGINT);
         tester.testRoundTrip(javaTimestampObjectInspector,
-                transform(writeValues, AbstractTestParquetReader::intToTimestamp),
+                transform(writeValues, AbstractTestParquetReader::intToSqlTimestamp),
                 transform(writeValues, AbstractTestParquetReader::intToSqlTimestamp),
                 TIMESTAMP);
 
         tester.testRoundTrip(javaDateObjectInspector,
-                transform(writeValues, AbstractTestParquetReader::intToDate),
+                transform(writeValues, AbstractTestParquetReader::intToSqlDate),
                 transform(writeValues, AbstractTestParquetReader::intToSqlDate),
                 DATE);
     }

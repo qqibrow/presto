@@ -90,6 +90,7 @@ public class ParquetSchemaConverter
         }
         if (INTEGER.equals(type)) {
             return Types.primitive(PrimitiveType.PrimitiveTypeName.INT32, OPTIONAL).named(name);
+            Types.p
         }
         if (BIGINT.equals(type) || TIMESTAMP.equals(type)) {
             return Types.primitive(PrimitiveType.PrimitiveTypeName.INT64, OPTIONAL).named(name);
