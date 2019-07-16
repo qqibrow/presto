@@ -16,6 +16,7 @@ package com.facebook.presto.parquet;
 import com.facebook.presto.spi.PrestoException;
 import com.facebook.presto.spi.block.Block;
 import com.facebook.presto.spi.type.CharType;
+import com.facebook.presto.spi.type.RealType;
 import com.facebook.presto.spi.type.VarbinaryType;
 import com.facebook.presto.spi.type.VarcharType;
 import io.airlift.slice.Slice;
@@ -31,6 +32,7 @@ import static com.facebook.presto.spi.type.BooleanType.BOOLEAN;
 import static com.facebook.presto.spi.type.DoubleType.DOUBLE;
 import static com.facebook.presto.spi.type.IntegerType.INTEGER;
 import static com.facebook.presto.spi.type.TimestampType.TIMESTAMP;
+import static java.lang.Float.intBitsToFloat;
 import static java.lang.String.format;
 
 public final class ParquetWriterUtils
@@ -47,11 +49,18 @@ public final class ParquetWriterUtils
         if (INTEGER.equals(type)) {
             return (block, i) -> valuesWriter.writeInteger((int) type.getLong(block, i));
         }
-        if (BIGINT.equals(type)) {
+        if (BIGINT.equals(type) || TIMESTAMP.equals(type)) {
             return (block, i) -> valuesWriter.writeLong(type.getLong(block, i));
         }
         if (DOUBLE.equals(type)) {
             return (block, i) -> valuesWriter.writeDouble(type.getDouble(block, i));
+        }
+        if (RealType.REAL.equals(type)) {
+            return (block, i) -> {
+                int intBits = (int) type.getLong(block, i);
+                float value = intBitsToFloat(intBits);
+                valuesWriter.writeFloat(value);
+            };
         }
         if (type instanceof VarcharType || type instanceof CharType || type instanceof VarbinaryType) {
             return (block, i) -> {

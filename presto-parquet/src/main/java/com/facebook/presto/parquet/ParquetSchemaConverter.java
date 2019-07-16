@@ -17,6 +17,7 @@ import com.facebook.presto.spi.PrestoException;
 import com.facebook.presto.spi.type.ArrayType;
 import com.facebook.presto.spi.type.CharType;
 import com.facebook.presto.spi.type.MapType;
+import com.facebook.presto.spi.type.RealType;
 import com.facebook.presto.spi.type.RowType;
 import com.facebook.presto.spi.type.Type;
 import com.facebook.presto.spi.type.VarbinaryType;
@@ -40,6 +41,7 @@ import static com.facebook.presto.spi.type.IntegerType.INTEGER;
 import static com.facebook.presto.spi.type.StandardTypes.ARRAY;
 import static com.facebook.presto.spi.type.StandardTypes.MAP;
 import static com.facebook.presto.spi.type.StandardTypes.ROW;
+import static com.facebook.presto.spi.type.TimestampType.TIMESTAMP;
 import static java.lang.String.format;
 import static org.apache.parquet.schema.Type.Repetition.OPTIONAL;
 
@@ -89,11 +91,14 @@ public class ParquetSchemaConverter
         if (INTEGER.equals(type)) {
             return Types.primitive(PrimitiveType.PrimitiveTypeName.INT32, OPTIONAL).named(name);
         }
-        if (BIGINT.equals(type)) {
+        if (BIGINT.equals(type) || TIMESTAMP.equals(type)) {
             return Types.primitive(PrimitiveType.PrimitiveTypeName.INT64, OPTIONAL).named(name);
         }
         if (DOUBLE.equals(type)) {
             return Types.primitive(PrimitiveType.PrimitiveTypeName.DOUBLE, OPTIONAL).named(name);
+        }
+        if (RealType.REAL.equals(type)) {
+            return Types.primitive(PrimitiveType.PrimitiveTypeName.FLOAT, OPTIONAL).named(name);
         }
         if (type instanceof VarcharType || type instanceof CharType || type instanceof VarbinaryType) {
             return Types.primitive(PrimitiveType.PrimitiveTypeName.BINARY, OPTIONAL).named(name);
