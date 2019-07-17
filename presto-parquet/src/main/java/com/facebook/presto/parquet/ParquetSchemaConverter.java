@@ -107,7 +107,8 @@ public class ParquetSchemaConverter
                         .as(OriginalType.DECIMAL)
                         .precision(decimalType.getPrecision())
                         .scale(decimalType.getScale()).named(name);
-            } else {
+            }
+            else {
                 return Types.optional(PrimitiveType.PrimitiveTypeName.FIXED_LEN_BYTE_ARRAY)
                         .length(16)
                         .as(OriginalType.DECIMAL)

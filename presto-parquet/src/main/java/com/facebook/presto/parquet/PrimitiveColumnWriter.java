@@ -25,6 +25,7 @@ import org.apache.parquet.format.ColumnMetaData;
 import org.apache.parquet.format.CompressionCodec;
 import org.apache.parquet.format.Encoding;
 import org.apache.parquet.format.converter.ParquetMetadataConverter;
+import org.apache.parquet.schema.PrimitiveType;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -36,6 +37,7 @@ import java.util.stream.Collectors;
 import static com.facebook.presto.parquet.ParquetDataOutput.createDataOutput;
 import static com.google.common.base.Preconditions.checkState;
 import static java.util.Objects.requireNonNull;
+import static org.apache.parquet.column.statistics.Statistics.createStats;
 import static org.apache.parquet.format.Encoding.PLAIN;
 
 public class PrimitiveColumnWriter
@@ -50,7 +52,7 @@ public class PrimitiveColumnWriter
     private final BiConsumer<Block, Integer> writer;
     CompressionCodec compressionCodec;
 
-    private final org.apache.parquet.format.Type parquetType;
+    private final PrimitiveType parquetType;
     private final ValuesWriter valuesWriter;
     private final RunLengthBitPackingHybridEncoder definitionLevel;
     private final RunLengthBitPackingHybridEncoder replicationLevel;
@@ -67,7 +69,7 @@ public class PrimitiveColumnWriter
 
     private final int maxDefinitionLevel;
 
-    public PrimitiveColumnWriter(Type type, org.apache.parquet.format.Type parquetType, List<String> name, int maxDefinitionLevel, int maxRepetitionLevel, ValuesWriter valuesWriter)
+    public PrimitiveColumnWriter(Type type, PrimitiveType parquetType, List<String> name, int maxDefinitionLevel, int maxRepetitionLevel, ValuesWriter valuesWriter)
     {
         this.type = requireNonNull(type, "type is null");
         HeapByteBufferAllocator allocator = HeapByteBufferAllocator.getInstance();
@@ -142,7 +144,7 @@ public class PrimitiveColumnWriter
         checkState(getDataStreamsCalled);
 
         return ImmutableList.of(new ColumnMetaData(
-                parquetType,
+                ParquetTypeConverter.getType(parquetType.getPrimitiveTypeName()),
                 encodings,
                 path,
                 compressionCodec,
@@ -170,7 +172,7 @@ public class PrimitiveColumnWriter
             long compressedSize = uncompressedSize;
 
             ByteArrayOutputStream pageHeaderOutputStream = new ByteArrayOutputStream();
-            parquetMetadataConverter.writeDataPageV2Header((int) uncompressedSize, (int) compressedSize, rows, nullCounts, rows, org.apache.parquet.column.Encoding.PLAIN, (int) replicationLevelOutput.size(), (int) definitionLevelOutput.size(), pageHeaderOutputStream);
+            parquetMetadataConverter.writeDataPageV2Header((int) uncompressedSize, (int) compressedSize, rows, nullCounts, rows, createStats(parquetType), org.apache.parquet.column.Encoding.PLAIN, (int) replicationLevelOutput.size(), (int) definitionLevelOutput.size(), pageHeaderOutputStream);
             pageheader = pageHeaderOutputStream.toByteArray();
 
             outputDataStreams.add(createDataOutput(Slices.wrappedBuffer(pageheader)));

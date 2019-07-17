@@ -130,7 +130,7 @@ public class ParquetWriter
             ColumnDescriptor columnDescriptor = new ColumnDescriptor(path, primitive, fieldRepetitionLevel, fieldDefinitionLevel);
             Type prestoType = requireNonNull(parquetSchemaConverter.getPrimitiveTypes().get(ImmutableList.copyOf(path)), " presto type is null");
             return new PrimitiveColumnWriter(prestoType,
-                    ParquetTypeConverter.getType(primitive.getPrimitiveTypeName()),
+                    primitive,
                     ImmutableList.copyOf(path),
                     fieldDefinitionLevel,
                     fieldRepetitionLevel,

@@ -882,7 +882,7 @@ public abstract class AbstractTestParquetReader
                 expectedValues.add(new SqlDecimal(value, precision, scale));
             }
             tester.testRoundTrip(new JavaHiveDecimalObjectInspector(new DecimalTypeInfo(precision, scale)),
-                    expectedValues.build(),
+                    writeValues.build(),
                     expectedValues.build(),
                     createDecimalType(precision, scale));
         }
