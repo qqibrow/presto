@@ -16,6 +16,7 @@ package com.facebook.presto.parquet;
 import com.facebook.presto.spi.PrestoException;
 import com.facebook.presto.spi.block.Block;
 import com.facebook.presto.spi.type.CharType;
+import com.facebook.presto.spi.type.DecimalType;
 import com.facebook.presto.spi.type.RealType;
 import com.facebook.presto.spi.type.VarbinaryType;
 import com.facebook.presto.spi.type.VarcharType;
@@ -29,6 +30,7 @@ import java.util.function.BiConsumer;
 import static com.facebook.presto.spi.StandardErrorCode.NOT_SUPPORTED;
 import static com.facebook.presto.spi.type.BigintType.BIGINT;
 import static com.facebook.presto.spi.type.BooleanType.BOOLEAN;
+import static com.facebook.presto.spi.type.DateType.DATE;
 import static com.facebook.presto.spi.type.DoubleType.DOUBLE;
 import static com.facebook.presto.spi.type.IntegerType.INTEGER;
 import static com.facebook.presto.spi.type.TimestampType.TIMESTAMP;
@@ -47,6 +49,24 @@ public final class ParquetWriterUtils
             return (block, i) -> valuesWriter.writeBoolean(type.getBoolean(block, i));
         }
         if (INTEGER.equals(type)) {
+            return (block, i) -> valuesWriter.writeInteger((int) type.getLong(block, i));
+        }
+        if (type instanceof DecimalType) {
+            DecimalType decimalType = (DecimalType) type;
+            if (decimalType.getPrecision() <= 9) {
+                return (block, i) -> valuesWriter.writeInteger((int) type.getLong(block, i));
+            }
+            else if (decimalType.isShort()) {
+                return (block, i) -> valuesWriter.writeLong(type.getLong(block, i));
+            }
+            else {
+                return (block, i) -> {
+                    Slice slice = type.getSlice(block, i);
+                    valuesWriter.writeBytes(Binary.fromConstantByteBuffer(slice.toByteBuffer()));
+                };
+            }
+        }
+        if (DATE.equals(type)) {
             return (block, i) -> valuesWriter.writeInteger((int) type.getLong(block, i));
         }
         if (BIGINT.equals(type) || TIMESTAMP.equals(type)) {

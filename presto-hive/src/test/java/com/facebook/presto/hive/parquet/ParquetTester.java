@@ -728,7 +728,8 @@ public class ParquetTester
                 type.writeLong(blockBuilder, ((Number) value).longValue());
             }
             else if (Decimals.isShortDecimal(type)) {
-                type.writeLong(blockBuilder, ((SqlDecimal) value).toBigDecimal().unscaledValue().longValue());
+                long longValue = ((SqlDecimal) value).getUnscaledValue().longValue();
+                type.writeLong(blockBuilder, longValue);
             }
             else if (Decimals.isLongDecimal(type)) {
                 type.writeSlice(blockBuilder, Decimals.encodeUnscaledValue(((SqlDecimal) value).toBigDecimal().unscaledValue()));

@@ -16,6 +16,7 @@ package com.facebook.presto.parquet;
 import com.facebook.presto.spi.PrestoException;
 import com.facebook.presto.spi.type.ArrayType;
 import com.facebook.presto.spi.type.CharType;
+import com.facebook.presto.spi.type.DecimalType;
 import com.facebook.presto.spi.type.MapType;
 import com.facebook.presto.spi.type.RealType;
 import com.facebook.presto.spi.type.RowType;
@@ -26,6 +27,7 @@ import com.google.common.collect.ImmutableList;
 import org.apache.parquet.Preconditions;
 import org.apache.parquet.schema.GroupType;
 import org.apache.parquet.schema.MessageType;
+import org.apache.parquet.schema.OriginalType;
 import org.apache.parquet.schema.PrimitiveType;
 import org.apache.parquet.schema.Types;
 
@@ -36,6 +38,7 @@ import java.util.Map;
 import static com.facebook.presto.spi.StandardErrorCode.NOT_SUPPORTED;
 import static com.facebook.presto.spi.type.BigintType.BIGINT;
 import static com.facebook.presto.spi.type.BooleanType.BOOLEAN;
+import static com.facebook.presto.spi.type.DateType.DATE;
 import static com.facebook.presto.spi.type.DoubleType.DOUBLE;
 import static com.facebook.presto.spi.type.IntegerType.INTEGER;
 import static com.facebook.presto.spi.type.StandardTypes.ARRAY;
@@ -90,7 +93,30 @@ public class ParquetSchemaConverter
         }
         if (INTEGER.equals(type)) {
             return Types.primitive(PrimitiveType.PrimitiveTypeName.INT32, OPTIONAL).named(name);
-            Types.p
+        }
+        if (type instanceof DecimalType) {
+            DecimalType decimalType = (DecimalType) type;
+            if (decimalType.getPrecision() <= 9) {
+                return Types.optional(PrimitiveType.PrimitiveTypeName.INT32)
+                        .as(OriginalType.DECIMAL)
+                        .precision(decimalType.getPrecision())
+                        .scale(decimalType.getScale()).named(name);
+            }
+            else if (decimalType.isShort()) {
+                return Types.optional(PrimitiveType.PrimitiveTypeName.INT64)
+                        .as(OriginalType.DECIMAL)
+                        .precision(decimalType.getPrecision())
+                        .scale(decimalType.getScale()).named(name);
+            } else {
+                return Types.optional(PrimitiveType.PrimitiveTypeName.FIXED_LEN_BYTE_ARRAY)
+                        .length(16)
+                        .as(OriginalType.DECIMAL)
+                        .precision(decimalType.getPrecision())
+                        .scale(decimalType.getScale()).named(name);
+            }
+        }
+        if (DATE.equals(type)) {
+            return Types.optional(PrimitiveType.PrimitiveTypeName.INT32).as(OriginalType.DATE).named(name);
         }
         if (BIGINT.equals(type) || TIMESTAMP.equals(type)) {
             return Types.primitive(PrimitiveType.PrimitiveTypeName.INT64, OPTIONAL).named(name);
