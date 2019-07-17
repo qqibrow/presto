@@ -26,7 +26,7 @@ public class TestHiveFileFormatBenchmark
     public void testParquetWriterFormat()
             throws Exception
     {
-        executeBenchmark(DataSet.LARGE_ARRAY_VARCHAR, HiveCompressionCodec.NONE, FileFormat.PRESTO_PARQUET);
+        executeBenchmark(DataSet.LINEITEM, HiveCompressionCodec.NONE, FileFormat.PRESTO_PARQUET);
     }
 
     @Test
